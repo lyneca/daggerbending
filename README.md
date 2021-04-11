@@ -88,3 +88,9 @@
   - Find an asset artist to make them
 - Dagger FX
   - Leave a trail of some sort (maybe)
+
+
+
+## Tips
+
+

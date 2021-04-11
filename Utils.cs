@@ -11,7 +11,7 @@ using Valve.VR;
 using ExtensionMethods;
 namespace ExtensionMethods {
     static class ExtensionMethods {
-        /// <summary>Get raw angular velocity of the player hand</summary>
+        /// <summary>Get raw angular velocity of the player hand</summaryt
         public static Vector3 GetHandAngularVelocity(this InputSteamVR self, Side side) {
             return SteamVR_Actions.Default.Pose.GetAngularVelocity((side == Side.Right) ? SteamVR_Input_Sources.RightHand : SteamVR_Input_Sources.LeftHand);
         }
@@ -29,6 +29,13 @@ namespace ExtensionMethods {
         /// <summary>Get raw rotation of the player hand</summary>
         public static Quaternion GetHandRotation(this InputOculus self, Side side) {
             return OVRInput.GetLocalControllerRotation(side == Side.Right ? OVRInput.Controller.RTouch : OVRInput.Controller.LTouch);
+        }
+
+        public static bool IsEmpty(this RagdollHand hand) {
+            return !(hand.caster.isFiring || hand.caster.isMerging)
+                && hand.grabbedHandle == null
+                && !hand.isGrabbed
+                && hand.caster.telekinesis.catchedHandle == null;
         }
 
         /// <summary>Get raw platform-independant hand rotation</summary>
@@ -159,11 +166,12 @@ namespace ExtensionMethods {
         /// Vector pointing away in the direction of the fingers
         /// </summary>
         public static Vector3 PointDir(this RagdollHand hand) => -hand.transform.right;
+        public static Vector3 Palm(this RagdollHand hand) => hand.transform.position + hand.PointDir() * 0.1f;
 
         /// <summary>
         /// Vector pointing in the direction of the thumb
         /// </summary>
-        public static Vector3 ThumbDir(this RagdollHand hand) => hand.transform.up;
+        public static Vector3 ThumbDir(this RagdollHand hand) => (hand.side == Side.Right) ? hand.transform.up : -hand.transform.up;
 
         /// <summary>
         /// Clamp a number between -1000 and 1000, just in case
@@ -209,6 +217,25 @@ namespace ExtensionMethods {
         /// Get a creature's torso
         /// </summary>
         public static RagdollPart GetTorso(this Creature creature) => creature.GetPart(RagdollPart.Type.Torso);
+
+        public static Vector3 Rotated(this Vector3 vector, Quaternion rotation, Vector3 pivot = default) {
+            return rotation * (vector - pivot) + pivot;
+        }
+
+        public static Vector3 Rotated(this Vector3 vector, Vector3 rotation, Vector3 pivot = default) {
+            return Rotated(vector, Quaternion.Euler(rotation), pivot);
+        }
+
+        public static Vector3 Rotated(this Vector3 vector, float x, float y, float z, Vector3 pivot = default) {
+            return Rotated(vector, Quaternion.Euler(x, y, z), pivot);
+        }
+
+        public static void SetPosition(this EffectInstance instance, Vector3 position) {
+            instance.effects.ForEach(effect => effect.transform.position = position);
+        }
+        public static void SetRotation(this EffectInstance instance, Quaternion rotation) {
+            instance.effects.ForEach(effect => effect.transform.rotation = rotation);
+        }
     }
 }
 static class Utils {
@@ -223,8 +250,8 @@ static class Utils {
         return field.GetValue(instance);
     }
 
-    public static Vector3 UniqueVector(GameObject obj, float min, float max) {
-        var rand = new System.Random(obj.GetInstanceID());
+    public static Vector3 UniqueVector(GameObject obj, float min, float max, int salt = 0) {
+        var rand = new System.Random(obj.GetInstanceID() + salt);
         return new Vector3(
             (float)rand.NextDouble() * (max - min) + min,
             (float)rand.NextDouble() * (max - min) + min,
@@ -264,6 +291,34 @@ static class Utils {
             .Where(creature => (!npc || creature != Player.currentCreature) && (!live || creature.state != Creature.State.Dead));
     }
 
+    static public ConfigurableJoint CreateTKJoint(Rigidbody source, Handle target, Side side) {
+        var joint = source.gameObject.AddComponent<ConfigurableJoint>();
+        joint.autoConfigureConnectedAnchor = false;
+        joint.anchor = Vector3.zero;
+        joint.connectedBody = target.rb;
+        joint.connectedAnchor = joint.connectedBody.transform.InverseTransformPoint(target.GetDefaultAxisPosition(side));
+        joint.rotationDriveMode = RotationDriveMode.XYAndZ;
+        JointDrive jointDrive1 = new JointDrive();
+        JointDrive jointDrive2 = new JointDrive();
+        jointDrive1.positionSpring = 100;
+        jointDrive1.positionDamper = 10;
+        jointDrive1.maximumForce = 1000;
+        jointDrive2.positionSpring = 10;
+        jointDrive2.positionDamper = 1;
+        jointDrive2.maximumForce = 1000;
+        joint.xDrive = jointDrive1;
+        joint.yDrive = jointDrive1;
+        joint.zDrive = jointDrive1;
+        joint.angularXDrive = jointDrive2;
+        joint.angularYZDrive = jointDrive2;
+        joint.xMotion = ConfigurableJointMotion.Free;
+        joint.yMotion = ConfigurableJointMotion.Free;
+        joint.zMotion = ConfigurableJointMotion.Free;
+        joint.angularXMotion = ConfigurableJointMotion.Free;
+        joint.angularYMotion = ConfigurableJointMotion.Free;
+        joint.angularZMotion = ConfigurableJointMotion.Free;
+        return joint;
+    }
 
     // Original idea from walterellisfun on github: https://github.com/walterellisfun/ConeCast/blob/master/ConeCastExtension.cs
     /// <summary>
