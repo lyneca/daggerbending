@@ -73,8 +73,7 @@ namespace DaggerBending {
 
             // Pick closest dagger from the orbiting ones
             if (isCasting && !GetHeld() && (spellCaster.ragdollHand.side == Side.Right ? handAngularVelocity.z < -7 : handAngularVelocity.z > 7) && handAngularVelocity.MostlyZ()) {
-                var dagger = GetDaggers().Where(item => item.CanSummon())
-                    .MinBy(item => Vector3.Distance(item.transform.position, spellCaster.ragdollHand.transform.position));
+                var dagger = controller.GetFreeDaggerClosestTo(spellCaster.ragdollHand.transform.position, 5);
                 if (!dagger)
                     return;
                 hasSpawnedDagger = true;

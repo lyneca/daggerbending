@@ -38,6 +38,8 @@ namespace ExtensionMethods {
                 && hand.caster.telekinesis.catchedHandle == null;
         }
 
+        public static int Capacity(this Holder holder) => holder.data.maxQuantity;
+
         /// <summary>Get raw platform-independant hand rotation</summary>
         public static Quaternion GetRawHandRotation(this RagdollHand hand) {
             if (PlayerControl.input is InputSteamVR inputSteam) {
@@ -235,6 +237,15 @@ namespace ExtensionMethods {
         }
         public static void SetRotation(this EffectInstance instance, Quaternion rotation) {
             instance.effects.ForEach(effect => effect.transform.rotation = rotation);
+        }
+
+        // This method is ILLEGAL and only acceptable in places where no other option exists
+        public static object Call(this object o, string methodName, params object[] args) {
+            var mi = o.GetType().GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance);
+            if (mi != null) {
+                return mi.Invoke(o, args);
+            }
+            return null;
         }
     }
 }
