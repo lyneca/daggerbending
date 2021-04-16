@@ -1,13 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 using ThunderRoad;
 using ExtensionMethods;
 
 namespace DaggerBending {
+    using States;
     public class SpellDagger : SpellCastCharge {
         public static int maxDaggerCount = 36;
         public static bool allowPunchDagger = false;
@@ -31,7 +29,7 @@ namespace DaggerBending {
             controller = spellCaster.mana.gameObject.GetOrAddComponent<DaggerController>();
             isCasting = false;
         }
-        public DaggerBehaviour GetHeld() => GetDaggers().FirstOrDefault(dagger => dagger.GetState() == DaggerState.Hand && dagger.hand == spellCaster.ragdollHand);
+        public DaggerBehaviour GetHeld() => GetDaggers().FirstOrDefault(dagger => dagger.IsAtHand(spellCaster.ragdollHand));
         List<DaggerBehaviour> GetDaggers() => controller.daggers;
         public override void Unload() {
             base.Unload();
@@ -47,10 +45,10 @@ namespace DaggerBending {
                     return;
                 if (handle != null)
                     DespawnHandle();
+                GetHeld()?.IntoState<OrbitState>();
             }
-            GetHeld()?.IntoOrbit();
         }
-        public bool IsGripping() => spellCaster.ragdollHand.IsGripping();
+        public bool IsGripping() => spellCaster?.ragdollHand?.IsGripping() ?? false;
         public void DetectNoGrip() {
             // Get hand velocity relative to head
             var velocity = spellCaster.ragdollHand.transform.InverseTransformVector(spellCaster.ragdollHand.rb.velocity)
@@ -63,10 +61,10 @@ namespace DaggerBending {
             if (isCasting && !GetHeld() && velocity.z > 3) {
                 hasSpawnedDagger = true;
                 controller.SpawnDagger(dagger => {
-                    dagger.IntoHand(spellCaster.ragdollHand);
                     dagger.transform.position = spellCaster.ragdollHand.PosAboveBackOfHand();
                     dagger.item.PointItemFlyRefAtTarget(spellCaster.ragdollHand.PointDir(), 1, -spellCaster.ragdollHand.PalmDir());
                     dagger.PlaySpawnEffect();
+                    dagger.IntoHand(spellCaster.ragdollHand);
                 });
                 return;
             }
@@ -123,7 +121,7 @@ namespace DaggerBending {
 
             if (IsGripping() && GetHeld()) {
                 var dagger = GetHeld();
-                dagger.Release();
+                dagger.IntoState<DefaultState>();
                 Fire(false);
                 currentCharge = 0;
                 spellCaster.isFiring = false;

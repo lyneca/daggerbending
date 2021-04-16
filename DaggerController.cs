@@ -12,6 +12,7 @@ using ThunderRoad;
 using ExtensionMethods;
 
 namespace DaggerBending {
+    using States;
     public class DaggerController : MonoBehaviour {
         public List<DaggerBehaviour> daggers = new List<DaggerBehaviour>();
         public List<Item> itemsBeingBlocked = new List<Item>();
@@ -67,12 +68,12 @@ namespace DaggerBending {
                     if (hand.side == Side.Right)
                         lastPunchTimeRight = Time.time;
                     if (DaggerAvailable())
-                        GetFreeDaggerClosestTo(creature.GetHead().transform.position).Track(creature);
+                        GetFreeDaggerClosestTo(creature.GetHead().transform.position).TrackCreature(creature);
                 }
             }
         }
         public DaggerBehaviour GetOrbitingDaggerClosestTo(Vector3 position) {
-            return GetDaggersInState(DaggerState.Orbit).MinBy(dagger => Vector3.Distance(dagger.transform.position, position));
+            return GetDaggersInState<OrbitState>().MinBy(dagger => Vector3.Distance(dagger.transform.position, position));
         }
 
         public SpellDagger GetSpell(Side side) {
@@ -119,7 +120,7 @@ namespace DaggerBending {
         }
         public Vector3 HandMidpoint() => (GetHand(Side.Left).Palm() + GetHand(Side.Right).Palm()) / 2;
         public Vector3 HandDirection() => (GetHand(Side.Left).PalmDir() + GetHand(Side.Right).PalmDir()) / 2;
-        public IEnumerable<DaggerBehaviour> GetDaggersInState(DaggerState state) => daggers.Where(dagger => dagger.item.holder == null && dagger.GetState() == state);
+        public IEnumerable<DaggerBehaviour> GetDaggersInState<T>() where T: DaggerState => daggers.Where(dagger => dagger.item.holder == null && dagger.GetState() is T);
         public bool FacingPosition(Vector3 origin, Vector3 direction, Vector3 target) => FacingDirection(direction, target - origin);
         public bool FacingDirection(Vector3 sourceDirection, Vector3 targetDirection) => Vector3.Angle(sourceDirection, targetDirection) < 50;
         public void SpawnDagger(Action<DaggerBehaviour> callback) {
@@ -150,7 +151,7 @@ namespace DaggerBending {
                         position.z + UnityEngine.Random.Range(-range, range));
                     dagger.rb.AddForce(Vector3.up * 3f * velocity, ForceMode.Impulse);
                     dagger.item.Throw();
-                    dagger.SetState(DaggerState.Orbit);
+                    dagger.IntoState<OrbitState>();
                     dagger.item.PointItemFlyRefAtTarget(Vector3.up, 1, (position - dagger.transform.position).normalized);
                     Array types = Enum.GetValues(typeof(ImbueType));
                     dagger.Imbue((ImbueType)types.GetValue(UnityEngine.Random.Range(0, types.Length)));
@@ -169,7 +170,7 @@ namespace DaggerBending {
                                                                          && behaviour.CanOrbit()
                                                                          && (force || behaviour.ShouldOrbit()))) {
                 dagger.ThrowForce(Vector3.up * 0.01f);
-                dagger.IntoOrbit();
+                dagger.IntoState<OrbitState>();
             };
         }
 
@@ -242,12 +243,12 @@ namespace DaggerBending {
         public bool DaggerAvailable(float maxPouchDistance = 0) {
             if (Time.time - lastUnSnap < unSnapDelay)
                 return false;
-            return GetDaggersInState(DaggerState.Orbit).Any()
-                || GetDaggersInState(DaggerState.Pouch).Any()
+            return GetDaggersInState<OrbitState>().Any()
+                || GetDaggersInState<PouchState>().Any()
                 || GetNonEmptyPouches(maxPouchDistance).Any();
         }
         public DaggerBehaviour GetFreeDaggerClosestTo(Vector3 pos, float maxPouchDistance = 0) {
-            var freeDaggers = GetDaggersInState(DaggerState.Orbit).Concat(GetDaggersInState(DaggerState.Pouch));
+            var freeDaggers = GetDaggersInState<OrbitState>().Concat(GetDaggersInState<PouchState>());
             var pouches = GetNonEmptyPouches(maxPouchDistance);
             if (freeDaggers.NotNull().Any()) {
                 return freeDaggers.OrderBy(dagger => Vector3.Distance(dagger.transform.position, pos)).First();
@@ -266,8 +267,8 @@ namespace DaggerBending {
         }
 
         public DaggerBehaviour GetFreeDagger(float maxPouchDistance = 0) {
-            var orbitingDaggers = GetDaggersInState(DaggerState.Orbit);
-            var pouchingDaggers = GetDaggersInState(DaggerState.Pouch);
+            var orbitingDaggers = GetDaggersInState<OrbitState>();
+            var pouchingDaggers = GetDaggersInState<PouchState>();
             var pouches = GetNonEmptyPouches(maxPouchDistance);
             if (orbitingDaggers.NotNull().Any()) {
                 return orbitingDaggers.First();
@@ -343,7 +344,10 @@ namespace DaggerBending {
         }
 
         public void ImbueRandomDagger(SpellCastCharge imbueSpell, Transform imbueEffectSource = null) {
-            var orbitingDaggers = GetDaggersInState(DaggerState.Orbit);
+            var orbitingDaggers = GetDaggersInState<OrbitState>().Concat(GetDaggersInState<PouchState>());
+            foreach (var pouch in GetNonEmptyPouches(5)) {
+                orbitingDaggers.Concat(pouch.items.SelectNotNull(item => item.GetComponent<DaggerBehaviour>()));
+            }
             var rand = new System.Random();
             var dagger = orbitingDaggers
                 .Where(d => d.GetImbue()?.spellCastBase?.id != imbueSpell.id || d.GetImbue()?.energy < d.GetImbue()?.maxEnergy * 0.8f)
@@ -407,14 +411,21 @@ namespace DaggerBending {
                         wasClaws[hand.side] = !hand.playerHand.controlHand.usePressed;
                     }
                     for (int i = 0; i < 3; i++) {
-                        if (DaggerAvailable() && !GetDaggersInState(DaggerState.Fist).Where(item => item.hand == hand).Select(item => item.index).Contains(i)) {
-                            GetFreeDaggerClosestTo(hand.transform.position)?.GoToFist(hand, i);
+                        if (DaggerAvailable() && !GetDaggersInState<ClawSwordState>().Where(dagger => dagger.IsClawSwordOn(hand)).Select(dagger => dagger.ClawSwordIndex()).Contains(i)) {
+                            GetFreeDaggerClosestTo(hand.transform.position)?.IntoClawSword(hand, i);
                         }
                     }
                 } else {
                     gripActive[hand.side] = false;
-                    foreach (var dagger in GetDaggersInState(DaggerState.Fist).Where(dagger => dagger.hand == hand)) {
-                        dagger.IntoOrbit();
+                    var handVelocity = hand.rb.velocity;
+                    if (handVelocity.magnitude > 1.5f) {
+                        foreach (var dagger in GetDaggersInState<ClawSwordState>().Where(dagger => dagger.IsClawSwordOn(hand))) {
+                            dagger.ThrowForce(handVelocity, true);
+                        }
+                    } else {
+                        foreach (var dagger in GetDaggersInState<ClawSwordState>().Where(dagger => dagger.IsClawSwordOn(hand))) {
+                            dagger.IntoState<OrbitState>();
+                        }
                     }
                 }
             });
@@ -435,9 +446,9 @@ namespace DaggerBending {
             }
 
             foreach (var pouch in GetNonFullPouches()) {
-                var orbiting = GetDaggersInState(DaggerState.Orbit);
+                var orbiting = GetDaggersInState<OrbitState>();
                 foreach (var dagger in orbiting.Take(pouch.Capacity() - pouch.currentQuantity)) {
-                    dagger.GoToPouch();
+                    dagger.IntoState<PouchState>();
                 }
             }
 
@@ -460,16 +471,6 @@ namespace DaggerBending {
                 state = null;
             }
 
-            foreach (Item item in Item.list
-                .Where(i => Vector3.Distance(i.transform.position, Player.currentCreature.GetHead().transform.position) < 4
-                         && !itemsBeingBlocked.Contains(i)
-                         && i.itemId == "MagicProjectile"
-                         && i.lastHandler?.creature != Player.currentCreature)) {
-                itemsBeingBlocked.Add(item);
-                item.OnDespawnEvent += () => { if (itemsBeingBlocked.Contains(item)) itemsBeingBlocked.Remove(item); };
-                GetOrbitingDaggerClosestTo(item.transform.position)?.BlockItem(item);
-            }
-
             // Send anything nearby into orbit
             SendDaggersToOrbit(dagger => Vector3.Distance(dagger.transform.position, Player.currentCreature.transform.position) < 3);
 
@@ -490,9 +491,10 @@ namespace DaggerBending {
                 }
             }
 
+            /*
             if (showDecoration) {
-                var orbiting = GetDaggersInState(DaggerState.Orbit);
-                var decoration = GetDaggersInState(DaggerState.Decoration);
+                var orbiting = GetDaggersInState<OrbitState>();
+                var decoration = GetDaggersInState<DecorationState>();
                 if (orbiting.Count() + decoration.Count() >= 10) {
                     var i = decoration.Count() - 1;
                     foreach (var dagger in orbiting.Take(Mathf.Clamp(4 - decoration.Count(), 0, 4))) {
@@ -500,9 +502,10 @@ namespace DaggerBending {
                     }
                 } else {
                     foreach (var dagger in decoration)
-                        dagger.IntoOrbit();
+                        dagger.IntoState<OrbitState>();
                 }
             }
+            */
 
             if (state == null)
                 DetectDualHandGestures();
@@ -556,7 +559,7 @@ namespace DaggerBending {
             while (controller.DaggerAvailable(5)) {
                 controller.GetFreeDagger(5)?.FlyTo(controller.HandMidpoint() + (Player.currentCreature.handLeft.PointDir() + Player.currentCreature.handRight.PointDir()).normalized * 2);
             }
-            foreach (var dagger in controller.GetDaggersInState(DaggerState.Flying)) {
+            foreach (var dagger in controller.GetDaggersInState<FlyState>()) {
                 Vector3 pos = Utils.UniqueVector(dagger.item.gameObject, -controller.HandDistance() * 2, +controller.HandDistance() * 2);
                 Vector3 normal = Utils.UniqueVector(dagger.item.gameObject, -controller.HandDistance() * 2, +controller.HandDistance() * 2, 1);
                 Vector3 attractionCenter = (Player.currentCreature.handLeft.PointDir() + Player.currentCreature.handRight.PointDir()).normalized * 2;
@@ -570,14 +573,12 @@ namespace DaggerBending {
             base.Exit(controller);
             var handVelocity = controller.BothHands().Select(hand => hand.rb.velocity).Aggregate((a, b) => a + b) / 2;
             if (handVelocity.magnitude > 2) {
-                foreach (var dagger in controller.GetDaggersInState(DaggerState.Flying)) {
-                    dagger.Release();
+                foreach (var dagger in controller.GetDaggersInState<FlyState>()) {
                     dagger.ThrowForce(handVelocity, true);
                 }
             } else {
-                foreach (var dagger in controller.GetDaggersInState(DaggerState.Flying)) {
-                    dagger.Release();
-                    dagger.IntoOrbit();
+                foreach (var dagger in controller.GetDaggersInState<FlyState>()) {
+                    dagger.IntoState<OrbitState>();
                 }
             }
         }
@@ -592,15 +593,16 @@ namespace DaggerBending {
         }
         public override void Update(DaggerController controller) {
             base.Update(controller);
-            var count = controller.GetDaggersInState(DaggerState.Shield).Where(dagger => dagger.hand == hand).Count();
+            var count = controller.GetDaggersInState<ShieldState>().Where(dagger => dagger.IsShieldOnHand(hand)).Count();
             while (controller.DaggerAvailable() && count < 7) {
-                controller.GetFreeDaggerClosestTo(hand.transform.position)?.IntoShield(count++, hand);
+                controller.GetFreeDaggerClosestTo(hand.transform.position)?.IntoOneHandShield(count++, hand);
             }
-            count = controller.GetDaggersInState(DaggerState.Shield).Where(dagger => dagger.hand == hand).Count();
-            foreach (var dagger in controller.GetDaggersInState(DaggerState.Shield).Where(dagger => dagger.hand == hand)) {
-                dagger.targetPos = hand.Palm() + hand.PalmDir() * -0.23f + hand.PointDir() * 0.1f;
-                dagger.targetRot = Quaternion.LookRotation(hand.PalmDir(), -hand.PointDir());
-                dagger.total = count;
+            count = controller.GetDaggersInState<ShieldState>().Where(dagger => dagger.IsShieldOnHand(hand)).Count();
+            foreach (var dagger in controller.GetDaggersInState<ShieldState>().Where(dagger => dagger.IsShieldOnHand(hand))) {
+                dagger.UpdateShield(
+                    hand.Palm() + hand.PalmDir() * -0.23f + hand.PointDir() * 0.1f,
+                    Quaternion.LookRotation(hand.PalmDir(), -hand.PointDir()),
+                    count);
             }
             foreach (Item item in Item.list.Where(item => item.itemId == "MagicProjectile")) {
                 item.GetComponentInChildren<SphereCollider>().radius = 0.2f;
@@ -608,8 +610,16 @@ namespace DaggerBending {
         }
         public override void Exit(DaggerController controller) {
             base.Exit(controller);
-            foreach (var dagger in controller.GetDaggersInState(DaggerState.Shield).Where(dagger => dagger.hand == hand)) {
-                dagger.IntoOrbit();
+            var handVelocity = controller.BothHands().Select(hand => hand.rb.velocity).Aggregate((a, b) => a + b) / 2;
+            if (handVelocity.magnitude > 1.5f) {
+                foreach (var dagger in controller.GetDaggersInState<ShieldState>().Where(dagger => dagger.IsShieldOnHand(hand))) {
+                    var shield = dagger.state as ShieldState;
+                    dagger.ThrowForce(handVelocity + shield.GetOffset() * 3, true);
+                }
+            } else {
+                foreach (var dagger in controller.GetDaggersInState<ShieldState>().Where(dagger => dagger.IsShieldOnHand(hand))) {
+                    dagger.IntoState<OrbitState>();
+                }
             }
         }
     }
@@ -660,26 +670,27 @@ namespace DaggerBending {
         }
         public override void Update(DaggerController controller) {
             base.Update(controller);
-            var count = controller.GetDaggersInState(DaggerState.Shield).Where(dagger => dagger.hand == null).Count();
+            var count = controller.GetDaggersInState<ShieldState>().Where(dagger => dagger.IsLargeShield()).Count();
             while (controller.DaggerAvailable() && count < 17) {
-                controller.GetFreeDaggerClosestTo(controller.HandMidpoint())?.IntoShield(count++);
+                controller.GetFreeDaggerClosestTo(controller.HandMidpoint())?.IntoLargeShield(count++);
             }
-            foreach (var dagger in controller.GetDaggersInState(DaggerState.Shield).Where(dagger => dagger.hand == null)) {
-                dagger.targetPos = controller.HandMidpoint() + controller.HandDirection() * 0.4f;
-                dagger.targetRot = Quaternion.LookRotation(controller.HandDirection());
-                dagger.total = count;
+            foreach (var dagger in controller.GetDaggersInState<ShieldState>().Where(dagger => dagger.IsLargeShield())) {
+                dagger.UpdateShield(
+                    controller.HandMidpoint() + controller.HandDirection() * 0.4f,
+                    Quaternion.LookRotation(controller.HandDirection()),
+                    count);
             }
         }
         public override void Exit(DaggerController controller) {
             base.Exit(controller);
-            foreach (var dagger in controller.GetDaggersInState(DaggerState.Shield).Where(dagger => dagger.hand == null)) {
-                dagger.IntoOrbit();
+            foreach (var dagger in controller.GetDaggersInState<ShieldState>().Where(dagger => dagger.IsLargeShield())) {
+                dagger.IntoState<OrbitState>();
             }
         }
     }
 
     public class PullOutFunctionality : Functionality {
-        public float delay = 0.3f;
+        public float delay = 0.7f;
         public static bool Test(DaggerController controller) => controller.HandDistance() > controller.startHandDistance + 0.1f;
         public override void Enter(DaggerController controller) {
             base.Enter(controller);
@@ -689,8 +700,7 @@ namespace DaggerBending {
             base.Update(controller);
             if (Time.time - enterTime > delay) {
                 enterTime = Time.time;
-                controller.GetDaggersInState(DaggerState.Orbit)
-                    .ElementAtOrDefault(UnityEngine.Random.Range(0, controller.daggers.Count()))?
+                controller.GetFreeDagger()?
                     .TrackRandomTarget(Utils.ConeCastCreature(
                         controller.HandMidpoint(), 20, (controller.GetHand(Side.Left).PointDir() + controller.GetHand(Side.Right).PointDir()) / 2, Mathf.Infinity, 60, live: false));
             }
@@ -711,7 +721,7 @@ namespace DaggerBending {
 
         public override void Update(DaggerController controller) {
             base.Update(controller);
-            controller.SendDaggersToOrbit(dagger => dagger.GetState() != DaggerState.Hand, true);
+            controller.SendDaggersToOrbit(dagger => true, true);
         }
     }
 
@@ -742,14 +752,14 @@ namespace DaggerBending {
             }
             float intensity = Mathf.Clamp(Vector3.Distance(holdHand.transform.position, drawHand.transform.position) * 2f - 0.5f, 0, 1);
             int numDaggersNeeded = Mathf.RoundToInt(intensity * 6);
-            
+
             effect.SetIntensity(intensity);
             holdHand.playerHand.controlHand.HapticShort(Mathf.Lerp(intensity, 0.05f, 0.3f));
             effect.effects.ForEach(effect => {
                 effect.transform.position = holdHand.transform.position;
                 effect.transform.rotation = Quaternion.LookRotation(holdHand.PointDir());
             });
-            int numDaggersOwned = controller.daggers.Where(dagger => dagger.GetState() == DaggerState.Slingshot).Count();
+            int numDaggersOwned = controller.daggers.Where(dagger => dagger.CheckState<SlingshotState>()).Count();
             if (numDaggersNeeded > numDaggersOwned) {
                 int numDaggersToGather = numDaggersNeeded - numDaggersOwned;
                 while (controller.DaggerAvailable(5) && numDaggersToGather > 0) {
@@ -759,12 +769,12 @@ namespace DaggerBending {
             } else if (numDaggersNeeded < numDaggersOwned) {
                 int numDaggersToRelease = numDaggersOwned - numDaggersNeeded;
                 foreach (var dagger in controller.daggers
-                    .Where(dagger => dagger.GetState() == DaggerState.Slingshot)
+                    .Where(dagger => dagger.CheckState<SlingshotState>())
                     .Take(numDaggersToRelease)) {
-                    dagger.IntoOrbit();
+                    dagger.IntoState<OrbitState>();
                 }
             }
-            IEnumerable<DaggerBehaviour> slingshotDaggers = controller.GetDaggersInState(DaggerState.Slingshot).OrderBy(dagger => dagger.item.GetInstanceID());
+            IEnumerable<DaggerBehaviour> slingshotDaggers = controller.GetDaggersInState<SlingshotState>().OrderBy(dagger => dagger.item.GetInstanceID());
             int i = 0;
             int count = slingshotDaggers.Count();
             if (drawHand.playerHand.controlHand.usePressed && slingshotDaggers.Count() > 0) {
@@ -783,15 +793,13 @@ namespace DaggerBending {
                 lastFired = 0;
             }
             foreach (var dagger in slingshotDaggers) {
-                dagger.slingshotIntensity = intensity;
-                dagger.index = i++;
-                dagger.total = count;
+                dagger.UpdateSlingshot(i++, count, intensity);
             }
         }
 
         public override void Exit(DaggerController controller) {
             base.Exit(controller);
-            foreach (var dagger in controller.GetDaggersInState(DaggerState.Slingshot)) {
+            foreach (var dagger in controller.GetDaggersInState<SlingshotState>()) {
                 Catalog.GetData<EffectData>("SlingshotFire").Spawn(holdHand.transform).Play();
                 dagger.ThrowForce(controller.SlingshotDir(holdHand) * 2 * (1 + controller.HandDistance() * 4), true);
             }
@@ -834,11 +842,9 @@ namespace DaggerBending {
             base.Exit(controller);
             summonedDaggers.ForEach(dagger => {
                 if (hand.rb.velocity.magnitude > 2) {
-                    dagger.Release();
                     dagger.ThrowForce(hand.rb.velocity, true);
                 } else {
-                    dagger.Release();
-                    dagger.IntoOrbit();
+                    dagger.IntoState<OrbitState>();
                 }
             });
         }

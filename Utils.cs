@@ -270,6 +270,10 @@ static class Utils {
         return field.GetValue(instance);
     }
 
+    public static Transform GetPlayerChest() {
+        return Player.currentCreature.ragdoll.GetPart(RagdollPart.Type.Torso).transform;
+    }
+
     public static Vector3 UniqueVector(GameObject obj, float min, float max, int salt = 0) {
         var rand = new System.Random(obj.GetInstanceID() + salt);
         return new Vector3(
