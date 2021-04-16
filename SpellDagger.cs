@@ -9,7 +9,8 @@ using ExtensionMethods;
 
 namespace DaggerBending {
     public class SpellDagger : SpellCastCharge {
-        public static int maxDaggerCount = 24;
+        public static int maxDaggerCount = 36;
+        public static bool allowPunchDagger = false;
         public bool isCasting = false;
         bool hasSpawnedDagger = false;
         bool isSpawningHandle = false;
@@ -62,25 +63,23 @@ namespace DaggerBending {
             if (isCasting && !GetHeld() && velocity.z > 3) {
                 hasSpawnedDagger = true;
                 controller.SpawnDagger(dagger => {
-                    dagger.SetState(DaggerState.Hand);
+                    dagger.IntoHand(spellCaster.ragdollHand);
                     dagger.transform.position = spellCaster.ragdollHand.PosAboveBackOfHand();
                     dagger.item.PointItemFlyRefAtTarget(spellCaster.ragdollHand.PointDir(), 1, -spellCaster.ragdollHand.PalmDir());
-                    dagger.hand = spellCaster.ragdollHand;
                     dagger.PlaySpawnEffect();
                 });
                 return;
             }
 
             // Pick closest dagger from the orbiting ones
-            if (isCasting && !GetHeld() && (spellCaster.ragdollHand.side == Side.Right ? handAngularVelocity.z < -7 : handAngularVelocity.z > 7) && handAngularVelocity.MostlyZ()) {
+            if (isCasting && !GetHeld()
+                          && (spellCaster.ragdollHand.side == Side.Right ? handAngularVelocity.z < -7 : handAngularVelocity.z > 7)
+                          && handAngularVelocity.MostlyZ()
+                          && controller.DaggerAvailable(5)) {
                 var dagger = controller.GetFreeDaggerClosestTo(spellCaster.ragdollHand.transform.position, 5);
-                if (!dagger)
-                    return;
                 hasSpawnedDagger = true;
                 Catalog.GetData<EffectData>("DaggerSelectFX").Spawn(dagger.transform).Play();
-                dagger.SetState(DaggerState.Hand);
-                dagger.hand = spellCaster.ragdollHand;
-                dagger.rb.velocity = Vector3.zero;
+                dagger.IntoHand(spellCaster.ragdollHand);
                 return;
             }
         }
@@ -143,7 +142,7 @@ namespace DaggerBending {
             base.Throw(velocity);
             var dagger = GetHeld();
             if (dagger) {
-                dagger.ThrowForce(velocity, true);
+                dagger.ThrowForce(velocity * 2, true);
                 dagger.SpawnThrowFX(velocity);
             }
         }

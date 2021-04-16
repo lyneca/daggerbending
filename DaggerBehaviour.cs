@@ -53,12 +53,16 @@ namespace DaggerBending {
             controller = Player.currentCreature.mana.gameObject.GetComponent<DaggerController>();
             hand = hand ?? controller.GetHand(Side.Right);
             Catalog.GetData<EffectData>("SlingshotGrabPoint").Spawn(transform).Play();
-            item.OnDespawnEvent += () => Debug.Log("Oh no! I am despawning :(");
             item.OnSnapEvent += holder => {
-                Debug.Log($"Entering holder. {holder.currentQuantity} / {holder.data.maxQuantity} slots filled. Am in slot {holder.items.IndexOf(item)}.");
-                Debug.Log($"Holder's items: {string.Join(", ", holder.items)}");
                 item.lastHandler = null;
                 hand.ClearTouch();
+                if (item.transform.parent.GetComponentsInChildren<Item>() is Item[] items && items.Count() > 1) {
+                    var slotToUse = holder.slots.FirstOrDefault(slot => slot.GetComponentsInChildren<Item>().Count() == 0);
+                    if (slotToUse == null)
+                        return;
+                    var holderPoint = item.GetHolderPoint(holder.data.targetAnchor);
+                    item.transform.MoveAlign(holderPoint.anchor, slotToUse.transform, slotToUse.transform);
+                }
             };
             item.OnUnSnapEvent += holder => {
                 if (holder.GetComponentInParent<Item>() is Item holderItem) {
@@ -89,6 +93,7 @@ namespace DaggerBending {
 
         public void Release() {
             SetState(DaggerState.None);
+            rb.isKinematic = false;
             DeleteJoint();
 
             if (item) {
@@ -102,6 +107,7 @@ namespace DaggerBending {
         public bool Held() => item.mainHandler != null;
 
         public void Throw() {
+            rb.isKinematic = false;
             Release();
             lastNoOrbitTime = Time.time;
             item.Throw(1, Item.FlyDetection.Forced);
@@ -217,9 +223,9 @@ namespace DaggerBending {
                 effect.transform.rotation = GetItemMeshObject().transform.rotation;
             });
             if (lastState != GetState()) {
-                if (state != DaggerState.Orbit && state != DaggerState.Shield && state != DaggerState.Flying && state != DaggerState.Fist && state != DaggerState.Pouch) {
+                if (state != DaggerState.Orbit && state != DaggerState.Shield && state != DaggerState.Flying && state != DaggerState.Fist && state != DaggerState.Pouch && state != DaggerState.Slingshot) {
                     ResetDaggerCollisions();
-                } else if (lastState == DaggerState.Decoration) {
+                } else if (lastState == DaggerState.Decoration || lastState == DaggerState.Hand) {
                     rb.isKinematic = false;
                 }
                 if (state == DaggerState.Pouch) {
@@ -250,12 +256,6 @@ namespace DaggerBending {
                     trailEffect.SetIntensity(1);
                     singleSlingshot = false;
                     Orbit();
-                    //Repel(Item.list.Where(i => i.itemId == "DaggerCommon"
-                    //                        && i.GetComponent<DaggerBehaviour>() is DaggerBehaviour behavior
-                    //                        && behavior != null
-                    //                        && behavior.GetState() == DaggerState.Orbit)
-                    //               .Select(dagger => dagger.GetComponent<DaggerBehaviour>())
-                    //               .ToList());
                     break;
                 case DaggerState.Decoration:
                     Decoration();
@@ -349,7 +349,15 @@ namespace DaggerBending {
             var target = targets.FirstOrDefault();
             if (!target)
                 return velocity;
-            var vectorToTarget = target.GetHead().transform.position - item.transform.position;
+            var extendedPoint = item.transform.position + velocity.normalized * Vector3.Distance(item.transform.position, target.GetTorso().transform.position);
+            if (controller.debug) {
+                controller.debugObj = controller.debugObj ?? new GameObject();
+                controller.debugObj.transform.position = extendedPoint;
+                controller.debugObj.GetComponentInChildren<EffectInstance>()?.Despawn();
+                Catalog.GetData<EffectData>("SlingshotGrabPoint").Spawn(controller.debugObj.transform).Play();
+            }
+            var targetPart = target.ragdoll.parts.MinBy(part => Vector3.Distance(part.transform.position, extendedPoint));
+            var vectorToTarget = targetPart.transform.position - item.transform.position;
             item.rb.velocity = Vector3.zero;
             velocity = vectorToTarget.normalized * velocity.magnitude;
             return velocity;
@@ -358,8 +366,9 @@ namespace DaggerBending {
         public void Pouch() {
             rb.useGravity = false;
             var pouch = controller.GetNonFullPouches().MinBy(quiver => Vector3.Distance(quiver.transform.position, transform.position));
-            if (item.mainHandler != null) {
+            if (item.handlers.Any() || item.isTelekinesisGrabbed || item.isGripped) {
                 SetState(DaggerState.None);
+                return;
             }
             if (!pouch) {
                 IntoOrbit();
@@ -378,9 +387,11 @@ namespace DaggerBending {
             if (Vector3.Distance(transform.position, pouch.transform.position) < 0.2f) {
                 Release();
                 item.rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+                pouch.RefreshChildAndParentHolder();
                 pouch.SetTouch(false);
                 pouch.Snap(item);
                 pouch.SetTouch(true);
+                var containingSlot = pouch.slots.FirstOrDefault(slot => slot.GetComponentsInChildren<Item>().Contains(item));
             }
         }
 
@@ -391,7 +402,10 @@ namespace DaggerBending {
 
         public void GoToHand() {
             rb.useGravity = false;
+            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            rb.isKinematic = true;
             if (item.mainHandler != null) {
+                rb.isKinematic = false;
                 singleSlingshot = true;
             } else {
                 item.transform.position = Vector3.Lerp(item.transform.position, hand.PosAboveBackOfHand(), Time.deltaTime * 10);
@@ -399,12 +413,23 @@ namespace DaggerBending {
             }
             if (singleSlingshot && item.mainHandler == null) {
                 singleSlingshot = false;
+                rb.isKinematic = false;
                 ThrowForce(hand.PosAboveBackOfHand() - item.transform.position * 5, true);
             }
         }
 
+        public void IntoHand(RagdollHand hand) {
+            DeleteJoint();
+            item.IgnoreRagdollCollision(hand.ragdoll, hand.side == Side.Left ? RagdollPart.Type.LeftHand : RagdollPart.Type.RightHand);
+            SetState(DaggerState.Hand);
+            this.hand = hand;
+            rb.velocity = Vector3.zero;
+        }
+
         public void OrbitHand() {
             item.IgnoreRagdollCollision(Player.currentCreature.ragdoll);
+            if (total == 0)
+                return;
             Vector3 offset = Quaternion.AngleAxis(360 / total * index, -Vector3.right) * (Vector3.up * (0.3f + 0.2f * (1 - slingshotIntensity)));
             item.rb.useGravity = false;
             UpdateJoint(hand.transform.TransformPoint(offset), Quaternion.LookRotation(controller.SlingshotDir(hand), transform.position - hand.transform.position));
@@ -415,6 +440,7 @@ namespace DaggerBending {
             this.hand = hand;
             CreateJoint();
             SetState(DaggerState.Slingshot);
+            IgnoreDaggerCollisions();
             Catalog.GetData<EffectData>("DaggerSnickFX").Spawn(transform).Play();
         }
 
@@ -436,6 +462,7 @@ namespace DaggerBending {
         public void IntoDecoration(int index) {
             SetState(DaggerState.Decoration);
             decorationIndex = index;
+            rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             rb.isKinematic = true;
         }
         public void IntoOrbit() {
@@ -503,7 +530,7 @@ namespace DaggerBending {
         public void Shield() {
             var offset = GetShieldOffset() * 0.2f;
             UpdateJoint(targetPos + (targetRot ?? default) * new Vector3(offset.x * 0.5f, offset.y, 0),
-                Quaternion.LookRotation((targetRot ?? default) * Vector3.down, (targetRot ?? default) * Vector3.right));
+                Quaternion.LookRotation((targetRot ?? default) * Vector3.down, (targetRot ?? default) * Vector3.right), 10);
             if (!item.isFlying) {
                 item.Throw(1, Item.FlyDetection.Forced);
                 item.IgnoreRagdollCollision(Player.currentCreature.ragdoll);
@@ -576,14 +603,15 @@ namespace DaggerBending {
             DeleteJoint();
             jointObj = jointObj ?? new GameObject().AddComponent<Rigidbody>();
             jointObj.isKinematic = true;
-            jointObj.transform.position = item.GetMainHandle(hand.side).transform.position;
+            jointObj.transform.position = item.GetMainHandle(hand?.side ?? Side.Left).transform.position;
             jointObj.transform.rotation = item.flyDirRef.rotation;
             joint = Utils.CreateTKJoint(jointObj, item.GetMainHandle(hand.side), hand.side);
         }
 
-        public void UpdateJoint(Vector3 position, Quaternion rotation) {
+        public void UpdateJoint(Vector3 position, Quaternion rotation, float strengthMult = 1) {
             if (!jointObj)
                 return;
+            Utils.UpdateDriveStrengths(jointObj.GetComponent<ConfigurableJoint>(), strengthMult);
             jointObj.transform.position = position;
             jointObj.transform.rotation = rotation;
         }
@@ -627,14 +655,15 @@ namespace DaggerBending {
                 position = hand.Palm() + hand.ThumbDir() * 0.15f + hand.ThumbDir() * (0.4f * (fistIndex + 0.3f * hand.rb.velocity.magnitude));
                 rotation = Quaternion.LookRotation(hand.ThumbDir(), -hand.PalmDir());
             } else {
-                var angle = index * 60 - 60;
+                var angleTarget = Mathf.Clamp(60 - hand.rb.velocity.magnitude * 15, 15, 60);
+                var angle = index * angleTarget - angleTarget;
                 Vector3 offset = Quaternion.AngleAxis(angle, -Vector3.right)
                     * (Vector3.forward * (0.2f + 0.3f * hand.rb.velocity.magnitude / 2))
                     + (-Vector3.right - Vector3.forward) * 0.3f * hand.rb.velocity.magnitude / 2;
                 position = hand.transform.TransformPoint(offset);
                 rotation = Quaternion.LookRotation(hand.PointDir(), -hand.PalmDir());
             }
-            UpdateJoint(position, rotation);
+            UpdateJoint(position, rotation, 10);
             item.Throw(1, Item.FlyDetection.Forced);
             item.IgnoreRagdollCollision(Player.currentCreature.ragdoll);
         }
@@ -718,22 +747,16 @@ namespace DaggerBending {
                 }
             }
             if (Time.time - lastNoOrbitTime > 0.5f) {
+                var target = targetCreature.GetHead().transform;
                 if (!startedTracking) {
-                    SpawnThrowFX(targetCreature.GetHead().transform.position - transform.position);
+                    SpawnThrowFX(target.position - transform.position);
                     startedTracking = true;
                 }
-                rb.AddForce(targetCreature.GetHead().transform.position - transform.position, ForceMode.Impulse);
+                item.PointItemFlyRefAtTarget(target.position - item.transform.position, 1);
+                rb.AddForce((target.position - item.transform.position).normalized * 2f, ForceMode.Impulse);
                 // Reorient force vector to target head
                 if (Vector3.Distance(targetCreature.GetHead().transform.position, transform.position) > 0.2f)
                     rb.velocity = Vector3.Project(rb.velocity, targetCreature.GetHead().transform.position - transform.position);
-            }
-            foreach (Collider collider in Physics.OverlapSphere(item.transform.position, 2, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) {
-                if (collider.attachedRigidbody?.gameObject.GetComponent<Creature>() is Creature creature
-                    && creature != null
-                    && creature == targetCreature)
-                    continue;
-                var distance = collider.ClosestPoint(item.transform.position);
-                rb.AddForce(distance.normalized * (1 / Mathf.Pow(distance.magnitude * 2, 3).SafetyClamp()).SafetyClamp());
             }
         }
 
@@ -776,6 +799,7 @@ namespace DaggerBending {
             } else {
                 modifier *= rb.mass * Mathf.Clamp(rb.drag, 1, 2);
             }
+            rb.isKinematic = false;
             rb.AddForce(velocity * 7 * modifier, ForceMode.Impulse);
             Throw();
         }

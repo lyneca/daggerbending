@@ -239,6 +239,9 @@ namespace ExtensionMethods {
             instance.effects.ForEach(effect => effect.transform.rotation = rotation);
         }
 
+        public static void RefreshIndexes(this Holder holder) {
+        }
+
         // This method is ILLEGAL and only acceptable in places where no other option exists
         public static object Call(this object o, string methodName, params object[] args) {
             var mi = o.GetType().GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance);
@@ -246,6 +249,12 @@ namespace ExtensionMethods {
                 return mi.Invoke(o, args);
             }
             return null;
+        }
+        public static Item UnSnapOne(this Holder holder, bool silent) {
+            Item obj = holder.items.LastOrDefault();
+            if (obj)
+                holder.UnSnap(obj, silent);
+            return obj;
         }
     }
 }
@@ -300,6 +309,24 @@ static class Utils {
         return ConeCastAll(origin, maxRadius, direction, maxDistance, coneAngle)
             .SelectNotNull(hit => hit.rigidbody?.gameObject.GetComponent<Creature>())
             .Where(creature => (!npc || creature != Player.currentCreature) && (!live || creature.state != Creature.State.Dead));
+    }
+
+    public static void UpdateDriveStrengths(ConfigurableJoint joint, float strength) {
+        if (joint == null)
+            return;
+        JointDrive posDrive = new JointDrive();
+        posDrive.positionSpring = 100 * strength;
+        posDrive.positionDamper = 10 * strength;
+        posDrive.maximumForce = 1000;
+        JointDrive rotDrive = new JointDrive();
+        rotDrive.positionSpring = 10 * strength;
+        rotDrive.positionDamper = 1 * strength;
+        rotDrive.maximumForce = 100;
+        joint.xDrive = posDrive;
+        joint.yDrive = posDrive;
+        joint.zDrive = posDrive;
+        joint.angularXDrive = rotDrive;
+        joint.angularYZDrive = rotDrive;
     }
 
     static public ConfigurableJoint CreateTKJoint(Rigidbody source, Handle target, Side side) {

@@ -10,7 +10,7 @@ namespace DaggerBending {
     class DaggerElementalMerge : SpellMergeData {
         public DaggerController controller;
         public float lastImbueTime = 0;
-        public float imbueDelay = 0.5f;
+        public float imbueDelay = 0.1f;
         public bool active;
         public SpellCaster daggerCaster;
         public SpellCaster otherCaster;
