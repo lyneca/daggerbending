@@ -13,7 +13,7 @@ namespace DaggerBending {
     using States;
 
     public class DaggerBehaviour : MonoBehaviour {
-        float lastNoOrbitTime;
+        public float lastNoOrbitTime;
         float orbitCooldown = 1.5f;
         bool justSpawned = true;
         public float decorationIndex = -1;
@@ -54,7 +54,16 @@ namespace DaggerBending {
                 }
             };
             item.OnTelekinesisGrabEvent += (handle, grabber) => IntoState<DefaultState>();
-            item.OnGrabEvent += (handle, hand) => IntoState<DefaultState>();
+            item.OnGrabEvent += (handle, hand) => {
+                IntoState<DefaultState>();
+                foreach (var collider in hand.colliderGroup.colliders) {
+                    foreach (var group in item.colliderGroups) {
+                        foreach (var otherCollider in group.colliders) {
+                            Physics.IgnoreCollision(collider, otherCollider);
+                        }
+                    }
+                }
+            };
             item.OnUngrabEvent += (handle, hand, throwing) => {
                 var velocity = Player.local.transform.rotation * PlayerControl.GetHand(hand.side).GetHandVelocity();
                 if (throwing && velocity.magnitude > 3) {

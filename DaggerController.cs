@@ -13,6 +13,8 @@ using ExtensionMethods;
 
 namespace DaggerBending {
     using States;
+    using System.Collections;
+
     public class DaggerController : MonoBehaviour {
         public List<DaggerBehaviour> daggers = new List<DaggerBehaviour>();
         public List<Item> itemsBeingBlocked = new List<Item>();
@@ -29,6 +31,8 @@ namespace DaggerBending {
         public float mapScale = 0.15f;
         public Dictionary<Side, bool> gripActive = new Dictionary<Side, bool>();
         public Dictionary<Side, bool> wasClaws = new Dictionary<Side, bool>();
+        public Dictionary<RagdollHand, bool> handHasFlipped = new Dictionary<RagdollHand, bool>();
+        public Dictionary<RagdollHand, bool> handFlipping = new Dictionary<RagdollHand, bool>();
         public Functionality state = null;
         public SingleHandFunctionality stateLeft = null;
         public SingleHandFunctionality stateRight = null;
@@ -42,11 +46,14 @@ namespace DaggerBending {
         float unSnapDelay = 0.00f;
         public bool debug = false;
         public GameObject debugObj;
-        bool toggledDebug;
 
         public void Start() {
             daggerData = Catalog.GetData<ItemData>("DaggerCommon");
             groupSummonEffectData = Catalog.GetData<EffectData>("GroupSummonFX");
+            handFlipping[GetHand(Side.Left)] = false;
+            handFlipping[GetHand(Side.Right)] = false;
+            handHasFlipped[GetHand(Side.Left)] = false;
+            handHasFlipped[GetHand(Side.Right)] = false;
             //Player.local.head.cam.depthTextureMode = DepthTextureMode.Depth | DepthTextureMode.DepthNormals | DepthTextureMode.MotionVectors;
             if (SpellDagger.allowPunchDagger) {
                 Player.currentCreature.handRight.colliderGroup.collisionHandler.OnCollisionStartEvent += (CollisionInstance collision) => PunchHandler(Player.currentCreature.handRight, collision);
@@ -398,6 +405,7 @@ namespace DaggerBending {
                 if (hand.IsGripping()
                  && hand.IsEmpty()
                  && hand.caster.spellInstance is SpellDagger
+                 && !handFlipping[hand]
                  && DaggerAvailable()
                  && state == null
                  && (hand.side == Side.Left ? stateLeft : stateRight) == null) {
@@ -420,7 +428,7 @@ namespace DaggerBending {
                     var handVelocity = hand.rb.velocity;
                     if (handVelocity.magnitude > 1.5f) {
                         foreach (var dagger in GetDaggersInState<ClawSwordState>().Where(dagger => dagger.IsClawSwordOn(hand))) {
-                            dagger.ThrowForce(handVelocity, true);
+                            dagger.ThrowForce(handVelocity * 0.7f, true);
                         }
                     } else {
                         foreach (var dagger in GetDaggersInState<ClawSwordState>().Where(dagger => dagger.IsClawSwordOn(hand))) {
@@ -513,15 +521,51 @@ namespace DaggerBending {
             state?.Update(this);
             stateLeft?.Update(this);
             stateRight?.Update(this);
-            if (OneHand(hand => hand.grabbedHandle?.item?.itemId == "DaggerCommon" && hand.playerHand.controlHand.alternateUsePressed)) {
-                if (!toggledDebug) {
-                    toggledDebug = true;
-                    debug = !debug;
-                    DisplayText.ShowText(new DisplayText.TextPriority($"Debug mode: {debug}", 10, TutorialData.TextType.SUBTITLE, 1));
+            ForBothHands(hand => {
+                if (hand.grabbedHandle?.item?.itemId == "DaggerCommon" && hand.playerHand.controlHand.alternateUsePressed && !handHasFlipped[hand] && !handFlipping[hand]) {
+                    handHasFlipped[hand] = true;
+                    StartCoroutine(DaggerFlip(hand));
+                } else if (!handFlipping[hand]) {
+                    handHasFlipped[hand] = false;
                 }
-            } else {
-                toggledDebug = false;
+            });
+        }
+
+        public IEnumerator DaggerFlip(RagdollHand hand) {
+            handFlipping[hand] = true;
+            var startTime = Time.time;
+            var dagger = hand.grabbedHandle.item;
+            var offset = hand.transform.InverseTransformPoint(dagger.transform.position);
+            var initalRotation = dagger.transform.rotation * Quaternion.Inverse(hand.transform.rotation);
+            float axisPosition = hand.gripInfo.axisPosition;
+            HandleOrientation currentOrientation = hand.gripInfo.orientation;
+            var spell = hand.caster.spellInstance;
+            var targetOrientation = hand.grabbedHandle.orientations
+                        .Where(orientation => orientation.side == currentOrientation.side && orientation != currentOrientation)
+                .Where(orientation => {
+                    Vector3 currentAngles = currentOrientation.transform.localEulerAngles;
+                    Vector3 newAngles = orientation.transform.localEulerAngles;
+                    return Mathf.Approximately(Mathf.Abs(currentAngles.x - newAngles.x) + Mathf.Abs(currentAngles.y - newAngles.y) + Mathf.Abs(currentAngles.z - newAngles.z), 360f);
+                })
+                .FirstOrDefault();
+            if (dagger.GetComponent<DaggerBehaviour>() is var behaviour) {
+                behaviour.lastNoOrbitTime = Time.time;
             }
+            hand.TryRelease();
+            dagger.rb.isKinematic = true;
+            dagger.IgnoreRagdollCollision(Player.currentCreature.ragdoll);
+            //hand.SetClosePose()
+            while (Time.time - startTime < 0.15f) {
+                var ratio = Mathf.Sqrt(Mathf.Clamp((Time.time - startTime) / 0.15f, 0, 1));
+                dagger.transform.rotation = initalRotation  * Quaternion.AngleAxis(ratio * 180, hand.ThumbDir()) * hand.transform.rotation;
+                dagger.transform.position = hand.transform.TransformPoint(offset);
+                yield return 0;
+            }
+            dagger.ResetRagdollCollision();
+            dagger.rb.isKinematic = false;
+            hand.Grab(dagger.GetMainHandle(hand.side), targetOrientation, axisPosition, true);
+            hand.caster.spellInstance = spell;
+            handFlipping[hand] = false;
         }
     }
 

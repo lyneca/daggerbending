@@ -25,6 +25,8 @@ namespace DaggerBending.States {
             base.Update();
             if (hand == null)
                 return;
+            if (dagger.item.mainHandler != null)
+                dagger.IntoState<DefaultState>();
             dagger.item.transform.position = Vector3.Lerp(dagger.item.transform.position, hand.PosAboveBackOfHand(), Time.deltaTime * 10);
             dagger.item.PointItemFlyRefAtTarget(hand.PointDir(), Time.deltaTime * 10, -hand.PalmDir());
         }

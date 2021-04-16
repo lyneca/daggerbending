@@ -10,6 +10,7 @@ namespace DaggerBending {
         public static int maxDaggerCount = 36;
         public static bool allowPunchDagger = false;
         public bool isCasting = false;
+        public bool debugEnabled = false;
         bool hasSpawnedDagger = false;
         bool isSpawningHandle = false;
         DaggerController controller;
@@ -102,9 +103,9 @@ namespace DaggerBending {
                 if (handle.mainHandler == null) {
                     handle.transform.position = GetHandlePosition();
                 }
-                if (!IsGripping() && !isCasting)
+                if (!IsGripping() || !isCasting || spellCaster.ragdollHand.grabbedHandle != null)
                     DespawnHandle();
-            } else if (isCasting && IsGripping() && !isSpawningHandle) {
+            } else if (isCasting && IsGripping() && !isSpawningHandle && spellCaster.ragdollHand.grabbedHandle == null) {
                 isSpawningHandle = true;
                 handleData.SpawnAsync(item => {
                     handle = item;
