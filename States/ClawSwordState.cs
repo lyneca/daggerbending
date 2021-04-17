@@ -28,14 +28,14 @@ namespace DaggerBending.States {
             Quaternion rotation;
             if (hand.playerHand.controlHand.usePressed) {
                 var fistIndex = (hand.side == Side.Right) ? index : (2 - index);
-                position = hand.Palm() + hand.ThumbDir() * 0.15f + hand.ThumbDir() * (0.4f * (fistIndex + 0.3f * hand.rb.velocity.magnitude));
+                position = hand.Palm() + hand.ThumbDir() * 0.15f + hand.ThumbDir() * (0.4f * (fistIndex + 0.3f * hand.Velocity().magnitude));
                 rotation = Quaternion.LookRotation(hand.ThumbDir(), -hand.PalmDir());
             } else {
-                var angleTarget = Mathf.Clamp(60 - hand.rb.velocity.magnitude * 15, 15, 60);
+                var angleTarget = Mathf.Clamp(60 - hand.Velocity().magnitude * 15, 15, 60);
                 var angle = index * angleTarget - angleTarget;
                 Vector3 offset = Quaternion.AngleAxis(angle, -Vector3.right)
-                    * (Vector3.forward * (0.2f + 0.3f * hand.rb.velocity.magnitude / 2))
-                    + (-Vector3.right - Vector3.forward) * 0.3f * hand.rb.velocity.magnitude / 2;
+                    * (Vector3.forward * (0.2f + 0.3f * hand.Velocity().magnitude / 2))
+                    + (-Vector3.right - Vector3.forward) * 0.3f * hand.Velocity().magnitude / 2;
                 position = hand.transform.TransformPoint(offset);
                 rotation = Quaternion.LookRotation(hand.PointDir(), -hand.PalmDir());
             }

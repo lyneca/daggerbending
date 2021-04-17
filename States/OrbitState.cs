@@ -14,7 +14,7 @@ namespace DaggerBending.States {
         public override void Enter(DaggerBehaviour dagger, DaggerController controller) {
             base.Enter(dagger, controller);
             dagger.IgnoreDaggerCollisions();
-            dagger.SetPhysics(0);
+            dagger.SetPhysics(0, 0.999f);
         }
         public override bool ShouldIgnorePlayer() => true;
         public override void Update() {

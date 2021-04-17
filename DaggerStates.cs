@@ -13,6 +13,7 @@ namespace DaggerBending {
         protected float enterTime;
         public bool gatherable = false;
         public virtual bool ShouldIgnorePlayer() => false;
+        public virtual bool Grabbable() => false;
         public virtual void Enter(DaggerBehaviour dagger, DaggerController controller) {
             this.controller = controller;
             this.dagger = dagger;

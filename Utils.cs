@@ -133,7 +133,7 @@ namespace ExtensionMethods {
         /// <summary>
         /// Is is this hand gripping?
         /// </summary>
-        public static bool IsGripping(this RagdollHand hand) => hand.playerHand.controlHand.gripPressed;
+        public static bool IsGripping(this RagdollHand hand) => hand?.playerHand?.controlHand?.gripPressed ?? false;
 
         /// <summary>
         /// Return the minimum entry in an interator using a custom comparable function
@@ -169,6 +169,7 @@ namespace ExtensionMethods {
         /// </summary>
         public static Vector3 PointDir(this RagdollHand hand) => -hand.transform.right;
         public static Vector3 Palm(this RagdollHand hand) => hand.transform.position + hand.PointDir() * 0.1f;
+        public static Vector3 Velocity(this RagdollHand hand) => hand.playerHand.controlHand.GetHandVelocity();
 
         /// <summary>
         /// Vector pointing in the direction of the thumb
@@ -311,6 +312,11 @@ static class Utils {
     /// <param name="live">Only detect live creatures</param>
     public static IEnumerable<Creature> ConeCastCreature(Vector3 origin, float maxRadius, Vector3 direction, float maxDistance, float coneAngle, bool npc = true, bool live = true) {
         return ConeCastAll(origin, maxRadius, direction, maxDistance, coneAngle)
+            .SelectNotNull(hit => hit.rigidbody?.gameObject.GetComponent<Creature>())
+            .Where(creature => (!npc || creature != Player.currentCreature) && (!live || creature.state != Creature.State.Dead));
+    }
+    public static IEnumerable<Creature> SphereCastCreature(Vector3 origin, float maxRadius, Vector3 direction, float maxDistance, bool npc = true, bool live = true) {
+        return Physics.SphereCastAll(origin, maxRadius, direction, maxDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
             .SelectNotNull(hit => hit.rigidbody?.gameObject.GetComponent<Creature>())
             .Where(creature => (!npc || creature != Player.currentCreature) && (!live || creature.state != Creature.State.Dead));
     }

@@ -52,7 +52,7 @@ namespace DaggerBending {
         public bool IsGripping() => spellCaster?.ragdollHand?.IsGripping() ?? false;
         public void DetectNoGrip() {
             // Get hand velocity relative to head
-            var velocity = spellCaster.ragdollHand.transform.InverseTransformVector(spellCaster.ragdollHand.rb.velocity)
+            var velocity = spellCaster.ragdollHand.transform.InverseTransformVector(spellCaster.ragdollHand.Velocity())
                 - Player.currentCreature.ragdoll.headPart.rb.velocity;
 
             // Get angular hand velocity

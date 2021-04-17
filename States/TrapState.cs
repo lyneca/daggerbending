@@ -17,6 +17,7 @@ namespace DaggerBending.States {
             trapEffect = Catalog.GetData<EffectData>("DaggerFloatFX").Spawn(dagger.transform.position, dagger.transform.rotation);
             dagger.SetPhysics(0);
         }
+        public override bool Grabbable() => true;
         public override void Update() {
             base.Update();
             if (!armed) {

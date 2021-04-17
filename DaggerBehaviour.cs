@@ -53,7 +53,10 @@ namespace DaggerBending {
                     Invoke("ResetObjectCollision", 2f);
                 }
             };
-            item.OnTelekinesisGrabEvent += (handle, grabber) => IntoState<DefaultState>();
+            item.OnTelekinesisGrabEvent += (handle, grabber) => {
+                if (!state.Grabbable())
+                    IntoState<DefaultState>();
+            };
             item.OnGrabEvent += (handle, hand) => {
                 IntoState<DefaultState>();
                 foreach (var collider in hand.colliderGroup.colliders) {
@@ -86,10 +89,6 @@ namespace DaggerBending {
 
         public bool Held() => item.mainHandler != null && !item.isTelekinesisGrabbed;
 
-        public void Throw() {
-            lastNoOrbitTime = Time.time;
-            item.Throw(1, Item.FlyDetection.Forced);
-        }
 
         SpellCastCharge GetImbueSpellFromType(ImbueType type) {
             string id = "";
@@ -345,7 +344,7 @@ namespace DaggerBending {
             Destroy(joint);
         }
         public void SetPhysics(float gravity = 1, float mass = 1, float drag = -1, float angularDrag = -1)
-            => item.mainCollisionHandler.SetPhysicModifier(this, 2, gravity, mass, drag, angularDrag);
+            => item.mainCollisionHandler.SetPhysicModifier(this, 4, gravity, mass, drag, angularDrag);
         public void ResetPhysics() => item.mainCollisionHandler.RemovePhysicModifier(this);
 
         public void IgnorePlayerCollisions() {
@@ -431,7 +430,6 @@ namespace DaggerBending {
             IntoState<DefaultState>();
             if (homing)
                 velocity = HomingThrow(velocity, homingAngle);
-            IgnoreDaggerCollisions();
             float modifier = 1;
             if (rb.mass < 1) {
                 modifier *= rb.mass;
@@ -439,9 +437,15 @@ namespace DaggerBending {
                 modifier *= rb.mass * Mathf.Clamp(rb.drag, 1, 2);
             }
             rb.AddForce(velocity * 7 * modifier, ForceMode.Impulse);
-            Throw();
+            lastNoOrbitTime = Time.time;
+            item.Throw(1, Item.FlyDetection.Forced);
+            IgnorePlayerCollisions();
+            StartCoroutine(ResetPlayerCollisionsAfter(1));
         }
-
+        public IEnumerator ResetPlayerCollisionsAfter(float seconds) {
+            yield return new WaitForSeconds(seconds);
+            ResetPlayerCollisions();
+        }
         public void Repel(List<DaggerBehaviour> daggers) {
             foreach (DaggerBehaviour dagger in daggers) {
                 if (dagger != this) {
