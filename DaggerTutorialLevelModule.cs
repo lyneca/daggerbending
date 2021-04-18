@@ -19,11 +19,16 @@ namespace DaggerBending {
             }
             //var updown = GameObject.Find("SandSword").AddComponent<MoveUpAndDown>();
             //updown.position = updown.transform.position;
-            EventManager.onPossess += (creature, _) => {
-                var handler = GameObject.Find("Platform").AddComponent<PlatformShaderHandler>();
-                handler.targetTransform = creature.transform;
-            };
+            EventManager.onPossess += PlatformPlayerAttach;
             return base.OnLoadCoroutine(level);
+        }
+        public void PlatformPlayerAttach(Creature creature, EventTime time) {
+            var handler = GameObject.Find("Platform").AddComponent<PlatformShaderHandler>();
+            handler.targetTransform = creature.transform;
+        }
+        public override void OnUnload(Level level) {
+            base.OnUnload(level);
+            EventManager.onPossess -= PlatformPlayerAttach;
         }
     }
 

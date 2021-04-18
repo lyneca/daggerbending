@@ -32,6 +32,7 @@ namespace DaggerBending {
         public Dictionary<Side, bool> gripActive = new Dictionary<Side, bool>();
         public Dictionary<Side, bool> wasClaws = new Dictionary<Side, bool>();
         public Dictionary<RagdollHand, bool> handHasFlipped = new Dictionary<RagdollHand, bool>();
+
         public Dictionary<RagdollHand, bool> handFlipping = new Dictionary<RagdollHand, bool>();
         public Functionality state = null;
         public SingleHandFunctionality stateLeft = null;
@@ -43,7 +44,7 @@ namespace DaggerBending {
         public GameObject mapHolder;
         public EffectInstance mapInstance;
         float lastUnSnap = 0;
-        float unSnapDelay = 0.00f;
+        readonly float unSnapDelay = 0.00f;
         public bool debug = false;
         public GameObject debugObj;
 
@@ -99,6 +100,8 @@ namespace DaggerBending {
             && GetSpell(Side.Right) != null
             && func(GetSpell(Side.Left))
             && func(GetSpell(Side.Right));
+        public Vector3 AverageHandPointDir() => (GetHand(Side.Left).PointDir() + GetHand(Side.Right).PointDir()).normalized;
+        public Vector3 AverageHandVelocity() => (GetHand(Side.Left).Velocity() + GetHand(Side.Right).Velocity());
         public IEnumerable<RagdollHand> BothHands() {
             return new List<RagdollHand> { GetHand(Side.Left), GetHand(Side.Right) };
         }
@@ -251,11 +254,10 @@ namespace DaggerBending {
             if (Time.time - lastUnSnap < unSnapDelay)
                 return false;
             return GetDaggersInState<OrbitState>().Any()
-                || GetDaggersInState<PouchState>().Any()
                 || GetNonEmptyPouches(maxPouchDistance).Any();
         }
         public DaggerBehaviour GetFreeDaggerClosestTo(Vector3 pos, float maxPouchDistance = 0) {
-            var freeDaggers = GetDaggersInState<OrbitState>().Concat(GetDaggersInState<PouchState>());
+            var freeDaggers = GetDaggersInState<OrbitState>();
             var pouches = GetNonEmptyPouches(maxPouchDistance);
             if (freeDaggers.NotNull().Any()) {
                 return freeDaggers.OrderBy(dagger => Vector3.Distance(dagger.transform.position, pos)).FirstOrDefault();
@@ -275,12 +277,9 @@ namespace DaggerBending {
 
         public DaggerBehaviour GetFreeDagger(float maxPouchDistance = 0) {
             var orbitingDaggers = GetDaggersInState<OrbitState>();
-            var pouchingDaggers = GetDaggersInState<PouchState>();
             var pouches = GetNonEmptyPouches(maxPouchDistance);
             if (orbitingDaggers.NotNull().Any()) {
                 return orbitingDaggers.First();
-            } else if (pouchingDaggers.NotNull().Any()) {
-                return pouchingDaggers.First();
             } else if (pouches.NotNull().Any()) {
                 if (Time.time - lastUnSnap < unSnapDelay)
                     return null;
@@ -606,16 +605,20 @@ namespace DaggerBending {
         public override void Update(DaggerController controller) {
             base.Update(controller);
             while (controller.DaggerAvailable(5)) {
-                controller.GetFreeDagger(5)?.FlyTo(controller.HandMidpoint() + (Player.currentCreature.handLeft.PointDir() + Player.currentCreature.handRight.PointDir()).normalized * 2);
+                controller.GetFreeDagger(5)?
+                    .FlyTo(
+                        controller.HandMidpoint() + controller.AverageHandPointDir() * 2,
+                        Quaternion.LookRotation(controller.AverageHandVelocity()));
             }
             foreach (var dagger in controller.GetDaggersInState<FlyState>()) {
                 Vector3 pos = Utils.UniqueVector(dagger.item.gameObject, -controller.HandDistance() * 2, +controller.HandDistance() * 2);
                 Vector3 normal = Utils.UniqueVector(dagger.item.gameObject, -controller.HandDistance() * 2, +controller.HandDistance() * 2, 1);
-                Vector3 attractionCenter = (Player.currentCreature.handLeft.PointDir() + Player.currentCreature.handRight.PointDir()).normalized * 2;
+                Vector3 centerPos = controller.HandMidpoint() + controller.AverageHandPointDir() * 2;;
+                Quaternion handAngle = Quaternion.LookRotation(controller.GetHand(Side.Left).transform.position - controller.GetHand(Side.Right).transform.position);
+                Vector3 facingDir = centerPos + handAngle * pos.Rotated(Quaternion.AngleAxis(Time.time * 120 + 30, normal)) - dagger.transform.position;
                 dagger.FlyTo(
-                    controller.HandMidpoint()
-                    + attractionCenter
-                    + pos.Rotated(Quaternion.AngleAxis(Time.time * 40, normal)));
+                    centerPos + handAngle * pos.Rotated(Quaternion.AngleAxis(Time.time * 120, normal)), 
+                    Quaternion.LookRotation((controller.AverageHandVelocity() + facingDir).normalized));
             }
         }
         public override void Exit(DaggerController controller) {
@@ -877,12 +880,14 @@ namespace DaggerBending {
             foreach (var dagger in summonedDaggers.NotNull()) {
                 if (dagger.item?.gameObject == null)
                     continue;
-                Vector3 attractionCenter = hand.PointDir() * 3;
-                Vector3 pos = Utils.UniqueVector(dagger.item.gameObject, -1, 1);
+                Vector3 pos = Utils.UniqueVector(dagger.item.gameObject, -0.5f, 0.5f);
                 Vector3 normal = Utils.UniqueVector(dagger.item.gameObject, -1, 1, 1);
-                dagger.FlyTo(hand.transform.position
-                    + attractionCenter
-                    + pos.Rotated(Quaternion.AngleAxis(Time.time * 40, normal)));
+                Vector3 centerPos = hand.transform.position + hand.PointDir() * 2;
+                Quaternion handAngle = hand.transform.rotation;
+                Vector3 facingDir = centerPos + handAngle * pos.Rotated(Quaternion.AngleAxis(Time.time * 120 + 30, normal)) - dagger.transform.position;
+                dagger.FlyTo(
+                    centerPos + handAngle * pos.Rotated(Quaternion.AngleAxis(Time.time * 120, normal)), 
+                    Quaternion.LookRotation((hand.Velocity() + facingDir).normalized));
             }
         }
 

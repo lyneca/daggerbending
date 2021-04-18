@@ -14,7 +14,7 @@ namespace DaggerBending {
 
     public class DaggerBehaviour : MonoBehaviour {
         public float lastNoOrbitTime;
-        float orbitCooldown = 1.5f;
+        readonly float orbitCooldown = 1.5f;
         bool justSpawned = true;
         public float decorationIndex = -1;
         public List<CollisionHandler.PhysicModifier> orgPhysicModifiers;
@@ -27,7 +27,6 @@ namespace DaggerBending {
         public Item item;
         public List<DaggerBehaviour> ignoredDaggers = new List<DaggerBehaviour>();
 
-        bool orgUseGravity = false;
         public Rigidbody rb;
         public void Start() {
             item = GetComponent<Item>();
@@ -74,7 +73,6 @@ namespace DaggerBending {
                     IntoState<DefaultState>();
                 }
             };
-            orgUseGravity = rb.useGravity;
             pidController = new PIDRigidbodyHelper(rb, 5, 1);
             if (state == null)
                 IntoState<DefaultState>();
@@ -420,7 +418,7 @@ namespace DaggerBending {
             }
         }
 
-        public void FlyTo(Vector3 position, Quaternion? rotation = null) {
+        public void FlyTo(Vector3 position, Quaternion rotation) {
             IntoState<FlyState>();
             if (state is FlyState flyState) {
                 flyState.UpdateTarget(position, rotation);

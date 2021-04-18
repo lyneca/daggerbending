@@ -9,30 +9,29 @@ using ExtensionMethods;
 
 namespace DaggerBending.States {
     class FlyState : DaggerState {
-        Quaternion? targetRot;
+        Quaternion targetRot;
         Vector3 targetPos;
         public override void Enter(DaggerBehaviour dagger, DaggerController controller) {
             base.Enter(dagger, controller);
             dagger.IgnoreDaggerCollisions();
             dagger.SetPhysics(0, 0.999f);
+            dagger.CreateJoint();
         }
         public override bool ShouldIgnorePlayer() => true;
-        public void UpdateTarget(Vector3 pos, Quaternion? rot = null) {
+        public void UpdateTarget(Vector3 pos, Quaternion rot) {
             targetPos = pos;
             targetRot = rot;
         }
         public override void Update() {
             base.Update();
-            dagger.pidController.UpdateVelocity(targetPos, 3);
-            if (targetRot != null) {
-                dagger.pidController.UpdateTorque(targetRot ?? default);
-            }
+            dagger.UpdateJoint(targetPos, targetRot, 10);
             dagger.item.Throw();
         }
         public override void Exit() {
             base.Exit();
             dagger.ResetDaggerCollisions();
             dagger.ResetPhysics();
+            dagger.DeleteJoint();
         }
     }
 }
