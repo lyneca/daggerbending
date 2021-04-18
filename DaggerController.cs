@@ -352,8 +352,9 @@ namespace DaggerBending {
         public void ImbueRandomDagger(SpellCastCharge imbueSpell, Transform imbueEffectSource = null) {
             var orbitingDaggers = GetDaggersInState<OrbitState>().Concat(GetDaggersInState<PouchState>());
             foreach (var pouch in GetNonEmptyPouches(5)) {
-                orbitingDaggers.Concat(pouch.items.SelectNotNull(item => item.GetComponent<DaggerBehaviour>()));
+                orbitingDaggers = orbitingDaggers.Concat(pouch.items.Select(item => item.gameObject.GetOrAddComponent<DaggerBehaviour>()));
             }
+
             var rand = new System.Random();
             var dagger = orbitingDaggers
                 .Where(d => d.GetImbue()?.spellCastBase?.id != imbueSpell.id || d.GetImbue()?.energy < d.GetImbue()?.maxEnergy * 0.8f)
@@ -613,11 +614,11 @@ namespace DaggerBending {
             foreach (var dagger in controller.GetDaggersInState<FlyState>()) {
                 Vector3 pos = Utils.UniqueVector(dagger.item.gameObject, -controller.HandDistance() * 2, +controller.HandDistance() * 2);
                 Vector3 normal = Utils.UniqueVector(dagger.item.gameObject, -controller.HandDistance() * 2, +controller.HandDistance() * 2, 1);
-                Vector3 centerPos = controller.HandMidpoint() + controller.AverageHandPointDir() * 2;;
+                Vector3 centerPos = controller.HandMidpoint() + controller.AverageHandPointDir() * 2;
                 Quaternion handAngle = Quaternion.LookRotation(controller.GetHand(Side.Left).transform.position - controller.GetHand(Side.Right).transform.position);
                 Vector3 facingDir = centerPos + handAngle * pos.Rotated(Quaternion.AngleAxis(Time.time * 120 + 30, normal)) - dagger.transform.position;
                 dagger.FlyTo(
-                    centerPos + handAngle * pos.Rotated(Quaternion.AngleAxis(Time.time * 120, normal)), 
+                    centerPos + handAngle * pos.Rotated(Quaternion.AngleAxis(Time.time * 120, normal)),
                     Quaternion.LookRotation((controller.AverageHandVelocity() + facingDir).normalized));
             }
         }
@@ -886,7 +887,7 @@ namespace DaggerBending {
                 Quaternion handAngle = hand.transform.rotation;
                 Vector3 facingDir = centerPos + handAngle * pos.Rotated(Quaternion.AngleAxis(Time.time * 120 + 30, normal)) - dagger.transform.position;
                 dagger.FlyTo(
-                    centerPos + handAngle * pos.Rotated(Quaternion.AngleAxis(Time.time * 120, normal)), 
+                    centerPos + handAngle * pos.Rotated(Quaternion.AngleAxis(Time.time * 120, normal)),
                     Quaternion.LookRotation((hand.Velocity() + facingDir).normalized));
             }
         }

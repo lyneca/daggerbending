@@ -32,7 +32,9 @@ namespace ExtensionMethods {
         }
 
         public static bool IsEmpty(this RagdollHand hand) {
-            return !(hand.caster.isFiring || hand.caster.isMerging)
+            return !hand.caster.isFiring
+                && !hand.caster.isMerging
+                && !Player.currentCreature.mana.mergeActive
                 && hand.grabbedHandle == null
                 && !hand.isGrabbed
                 && hand.caster.telekinesis.catchedHandle == null;

@@ -139,7 +139,10 @@ namespace DaggerBending {
                 group => group?
                     .imbueEmissionRenderer?
                     .GetComponent<MeshFilter>() != null);
-            if (colliderGroups.Any() && colliderGroups.First().imbueEmissionRenderer is var emissionRenderer && emissionRenderer && emissionRenderer.GetComponent<MeshFilter>()) {
+            if (colliderGroups.Any()
+                && colliderGroups.First().imbueEmissionRenderer is var emissionRenderer
+                && emissionRenderer
+                && emissionRenderer.GetComponent<MeshFilter>()) {
                 return emissionRenderer.gameObject;
             } else if (item.GetComponentInChildren<MeshFilter>() is MeshFilter filter && filter != null) {
                 return filter.gameObject;
@@ -343,11 +346,11 @@ namespace DaggerBending {
             joint = Utils.CreateTKJoint(jointObj, item.GetMainHandle(Side.Left), Side.Left);
         }
 
-        public void UpdateJoint(Vector3 position, Quaternion rotation, float strengthMult = 1) {
+        public void UpdateJoint(Vector3 position, Quaternion rotation, float strengthMult = 1, float lerpFactor = 1) {
             if (!jointObj)
                 return;
             Utils.UpdateDriveStrengths(jointObj.GetComponent<ConfigurableJoint>(), strengthMult);
-            jointObj.transform.position = position;
+            jointObj.transform.position = Vector3.Lerp(jointObj.transform.position, position, lerpFactor);
             jointObj.transform.rotation = rotation;
         }
 
@@ -451,7 +454,7 @@ namespace DaggerBending {
             lastNoOrbitTime = Time.time;
             item.Throw(1, Item.FlyDetection.Forced);
             IgnorePlayerCollisions();
-            StartCoroutine(ResetPlayerCollisionsAfter(1));
+            StartCoroutine(ResetPlayerCollisionsAfter(2));
         }
         public IEnumerator ResetPlayerCollisionsAfter(float seconds) {
             yield return new WaitForSeconds(seconds);

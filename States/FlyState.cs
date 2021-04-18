@@ -24,7 +24,7 @@ namespace DaggerBending.States {
         }
         public override void Update() {
             base.Update();
-            dagger.UpdateJoint(targetPos, targetRot, 10);
+            dagger.UpdateJoint(targetPos, targetRot, 10, Time.deltaTime * 10);
             dagger.item.Throw();
         }
         public override void Exit() {
