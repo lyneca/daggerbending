@@ -62,6 +62,7 @@ namespace DaggerBending {
             if (isCasting && !GetHeld() && velocity.z > 3) {
                 hasSpawnedDagger = true;
                 controller.SpawnDagger(dagger => {
+                    dagger.SpawnSizeIncrease();
                     dagger.transform.position = spellCaster.ragdollHand.PosAboveBackOfHand();
                     dagger.item.PointItemFlyRefAtTarget(spellCaster.ragdollHand.PointDir(), 1, -spellCaster.ragdollHand.PalmDir());
                     dagger.PlaySpawnEffect();

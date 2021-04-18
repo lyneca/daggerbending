@@ -169,7 +169,21 @@ namespace ExtensionMethods {
         /// </summary>
         public static Vector3 PointDir(this RagdollHand hand) => -hand.transform.right;
         public static Vector3 Palm(this RagdollHand hand) => hand.transform.position + hand.PointDir() * 0.1f;
-        public static Vector3 Velocity(this RagdollHand hand) => hand.playerHand.controlHand.GetHandVelocity();
+        public static Vector3 Velocity(this RagdollHand hand) => Player.local.transform.rotation * hand.playerHand.controlHand.GetHandVelocity();
+        public static float MapOverCurve(this float time, params Tuple<float, float>[] points) {
+            var curve = new AnimationCurve();
+            foreach (var point in points) {
+                curve.AddKey(new Keyframe(point.Item1, point.Item2));
+            }
+            return curve.Evaluate(time);
+        }
+        public static float MapOverCurve(this float time, params Tuple<float, float, float, float>[] points) {
+            var curve = new AnimationCurve();
+            foreach (var point in points) {
+                curve.AddKey(new Keyframe(point.Item1, point.Item2, point.Item3, point.Item4));
+            }
+            return curve.Evaluate(time);
+        }
 
         /// <summary>
         /// Vector pointing in the direction of the thumb

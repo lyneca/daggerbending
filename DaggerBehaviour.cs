@@ -80,6 +80,19 @@ namespace DaggerBending {
                 IntoState<DefaultState>();
         }
 
+        public void SpawnSizeIncrease() {
+            StartCoroutine(ScaleOverTime());
+        }
+        public IEnumerator ScaleOverTime() {
+            float time = Time.time;
+            while (Time.time - time < 0.2f) {
+                float amount = Mathf.Clamp((Time.time - time) / 0.2f, 0, 1).MapOverCurve(
+                    Tuple.Create(0f, 0f, 0f, 0f),
+                    Tuple.Create(1f, 1f, 0f, 0f));
+                item.transform.localScale = Vector3.one * amount;
+                yield return 0;
+            }
+        }
         public void PlaySpawnEffect() {
             var spawnFX = Catalog.GetData<EffectData>("DaggerSpawnFX").Spawn(item.transform);
             spawnFX.SetMesh(GetItemMesh());
