@@ -406,7 +406,6 @@ namespace DaggerBending {
                  && hand.IsEmpty()
                  && hand.caster.spellInstance is SpellDagger
                  && !handFlipping[hand]
-                 && DaggerAvailable()
                  && state == null
                  && (hand.side == Side.Left ? stateLeft : stateRight) == null) {
                     if (gripActive[hand.side]) {

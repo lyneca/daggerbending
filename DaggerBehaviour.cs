@@ -26,6 +26,7 @@ namespace DaggerBending {
         bool isIgnoringPlayer = false;
         public Item item;
         public List<DaggerBehaviour> ignoredDaggers = new List<DaggerBehaviour>();
+        public EffectInstance trailEffect;
 
         public Rigidbody rb;
         public void Start() {
@@ -34,6 +35,9 @@ namespace DaggerBending {
             //item.mainCollisionHandler.damagers.ForEach(damager => damager.penetrationExitOnMaxDepth = true);
             controller = Player.currentCreature.mana.gameObject.GetComponent<DaggerController>();
             Catalog.GetData<EffectData>("SlingshotGrabPoint").Spawn(transform).Play();
+            trailEffect = Catalog.GetData<EffectData>("ShiftTrail").Spawn(transform);
+            trailEffect.SetIntensity(0);
+            trailEffect.Play();
             item.OnSnapEvent += holder => {
                 item.lastHandler?.ClearTouch();
                 item.lastHandler = null;
@@ -164,8 +168,8 @@ namespace DaggerBending {
         public void Despawn() {
             if (!item)
                 return;
-            state.Exit();
-            item.Despawn();
+            IntoState<DefaultState>();
+            item.Despawn(0.1f);
         }
 
         public void SpawnThrowFX(Vector3 velocity) {
@@ -180,6 +184,7 @@ namespace DaggerBending {
         public void Update() {
             if (!item)
                 return;
+            trailEffect.SetIntensity(Mathf.Clamp(rb.velocity.magnitude * 0.1f, 0, 1));
             state?.Update();
             justSpawned = false;
         }
@@ -361,7 +366,13 @@ namespace DaggerBending {
             => item.mainCollisionHandler.SetPhysicModifier(this, 4, gravity, mass, drag, angularDrag);
         public void ResetPhysics() => item.mainCollisionHandler.RemovePhysicModifier(this);
         public IEnumerator Explosion() {
+            yield return 0;
+            if (!item.isPenetrating) {
+                rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+                rb.isKinematic = true;
+            }
             var effectHolder = new GameObject();
+            trailEffect.SetParent(null);
             effectHolder.transform.SetPositionAndRotation(transform.position, transform.rotation);
             Catalog.GetData<EffectData>("ExplosionFX").Spawn(effectHolder.transform).Play();
             yield return new WaitForSeconds(0.623f);
@@ -395,10 +406,11 @@ namespace DaggerBending {
                 if (ignoredDaggers.Contains(dagger))
                     continue;
                 ignoredDaggers.Add(dagger);
-                foreach (Collider thisCollider in gameObject.GetComponentsInChildren<Collider>()) {
-                    foreach (Collider otherCollider in dagger.gameObject.GetComponentsInChildren<Collider>()) {
-                        Physics.IgnoreCollision(thisCollider, otherCollider, true);
-                    }
+                if ((dagger?.gameObject?.activeSelf ?? false) && (gameObject?.activeSelf ?? false))
+                    foreach (Collider thisCollider in gameObject.GetComponentsInChildren<Collider>()) {
+                        foreach (Collider otherCollider in dagger.gameObject.GetComponentsInChildren<Collider>()) {
+                            Physics.IgnoreCollision(thisCollider, otherCollider, true);
+                        }
                 }
             }
         }
@@ -412,11 +424,12 @@ namespace DaggerBending {
                 if (!ignoredDaggers.Contains(dagger))
                     continue;
                 ignoredDaggers.Remove(dagger);
-                if (gameObject.GetComponentInChildren<Collider>() && dagger.GetComponentInChildren<Collider>())
+                if ((dagger?.gameObject?.activeSelf ?? false) && (gameObject?.activeSelf ?? false))
                     foreach (Collider thisCollider in gameObject.GetComponentsInChildren<Collider>()) {
-                        foreach (Collider otherCollider in dagger.gameObject.GetComponentsInChildren<Collider>()) {
-                            Physics.IgnoreCollision(thisCollider, otherCollider, false);
-                        }
+                        if (dagger?.gameObject?.GetComponentsInChildren<Collider>().Any() ?? false)
+                            foreach (Collider otherCollider in dagger.gameObject.GetComponentsInChildren<Collider>()) {
+                                Physics.IgnoreCollision(thisCollider, otherCollider, false);
+                            }
                     }
             }
         }

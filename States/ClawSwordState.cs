@@ -10,9 +10,12 @@ using ExtensionMethods;
 namespace DaggerBending.States {
     class ClawSwordState : DaggerState {
         public RagdollHand hand;
+        EffectInstance whooshEffect;
         public int index;
         public override void Enter(DaggerBehaviour dagger, DaggerController controller) {
             base.Enter(dagger, controller);
+            whooshEffect = Catalog.GetData<EffectData>("ClawsWhoosh").Spawn(dagger.transform);
+            whooshEffect.Play();
             dagger.SetPhysics(0);
             dagger.CreateJoint();
             dagger.IgnoreDaggerCollisions();
@@ -25,6 +28,9 @@ namespace DaggerBending.States {
         public override bool CanImbue(RagdollHand hand) => hand != this.hand;
         public override void Update() {
             base.Update();
+            if (!hand)
+                return;
+            whooshEffect.SetSpeed(Mathf.InverseLerp(3, 12, dagger.rb.velocity.magnitude));
             Vector3 position;
             Quaternion rotation;
             if (hand.playerHand.controlHand.usePressed) {
@@ -47,6 +53,7 @@ namespace DaggerBending.States {
         public override void Exit() {
             base.Exit();
             dagger.ResetPhysics();
+            whooshEffect.End();
             dagger.DeleteJoint();
             dagger.ResetDaggerCollisions();
         }
