@@ -26,6 +26,7 @@ namespace DaggerBending.States {
         public void Init(Creature creature) {
             target = creature;
         }
+        public override bool CanImbue(RagdollHand hand) => false;
         public override void Update() {
             base.Update();
             if (!target)

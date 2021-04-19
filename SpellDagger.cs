@@ -18,6 +18,7 @@ namespace DaggerBending {
         EffectInstance grabPointFX;
         ItemData handleData;
         public Item handle;
+        bool hasExplosionStarted = false;
         public override void OnCatalogRefresh() {
             base.OnCatalogRefresh();
             grabPointEffectData = Catalog.GetData<EffectData>("SlingshotGrabPoint");
@@ -29,6 +30,42 @@ namespace DaggerBending {
             isSpawningHandle = false;
             controller = spellCaster.mana.gameObject.GetOrAddComponent<DaggerController>();
             isCasting = false;
+        }
+        public override void Load(Imbue imbue) {
+            if (imbue.colliderGroup.collisionHandler.item is Item item && item.itemId == "DaggerCommon") {
+                var dagger = item.gameObject.GetOrAddComponent<DaggerBehaviour>();
+                controller = controller ?? Player.currentCreature.mana.gameObject.GetOrAddComponent<DaggerController>();
+                controller.ForBothHands(rh => {
+                    if (rh.caster?.spellInstance is SpellDagger spell) {
+                        Debug.Log($"{rh.side}: {dagger.state?.CanImbue(rh)}, {spell.isCasting}, {Vector3.Distance(spell.spellCaster.magic.transform.position, imbue.colliderGroup.transform.position) <= spell.imbueRadius * 2}");
+                    }
+                });
+                var hand = controller.HandWhere(ragdollHand => ragdollHand?.caster?.spellInstance is SpellDagger spell
+                                                            && spell.isCasting
+                                                            && (dagger.state?.CanImbue(ragdollHand) ?? true)
+                                                            && Vector3.Distance(spell.spellCaster.magic.transform.position, imbue.colliderGroup.transform.position) <= spell.imbueRadius * 2);
+                if (hand == null) {
+                    Debug.Log("Hand is null, not imbuing");
+                    return;
+                }
+                base.Load(imbue);
+            }
+        }
+        public override void UpdateImbue() {
+            if (imbue == null)
+                return;
+            base.UpdateImbue();
+            if (imbue.colliderGroup.collisionHandler.item is Item item && item.gameObject.GetComponent<DaggerBehaviour>() is var dagger) {
+                if (dagger.item.isPenetrating && !hasExplosionStarted) {
+                    hasExplosionStarted = true;
+                    dagger.StartCoroutine(dagger.Explosion());
+                }
+            }
+        }
+        public override void SlowUpdateImbue() {
+            if (imbue == null)
+                return;
+            base.SlowUpdateImbue();
         }
         public DaggerBehaviour GetHeld() => GetDaggers().FirstOrDefault(dagger => dagger.IsAtHand(spellCaster.ragdollHand));
         List<DaggerBehaviour> GetDaggers() => controller.daggers;

@@ -18,6 +18,7 @@ namespace DaggerBending.States {
             dagger.SetPhysics(0);
         }
         public override bool Grabbable() => true;
+        public override bool CanImbue(RagdollHand hand) => armed;
         public override void Update() {
             base.Update();
             if (!armed) {

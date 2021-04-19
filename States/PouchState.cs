@@ -18,6 +18,7 @@ namespace DaggerBending.States {
             dagger.CreateJoint();
         }
         public override bool ShouldIgnorePlayer() => true;
+        public override bool CanImbue(RagdollHand hand) => false;
         public override void Update() {
             base.Update();
             var pouch = controller.GetNonFullPouches().MinBy(quiver => Vector3.Distance(quiver.transform.position, dagger.transform.position));

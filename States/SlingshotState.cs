@@ -22,6 +22,7 @@ namespace DaggerBending.States {
             Catalog.GetData<EffectData>("DaggerSnickFX").Spawn(dagger.transform).Play();
         }
         public void Init(RagdollHand hand) => this.hand = hand;
+        public override bool CanImbue(RagdollHand hand) => false;
         public void UpdateParams(int index, int count, float intensity) {
             this.index = index;
             this.count = count;

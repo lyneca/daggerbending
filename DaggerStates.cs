@@ -14,6 +14,7 @@ namespace DaggerBending {
         public bool gatherable = false;
         public virtual bool ShouldIgnorePlayer() => false;
         public virtual bool Grabbable() => false;
+        public virtual bool CanImbue(RagdollHand hand) => false;
         public virtual void Enter(DaggerBehaviour dagger, DaggerController controller) {
             this.controller = controller;
             this.dagger = dagger;

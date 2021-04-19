@@ -360,7 +360,14 @@ namespace DaggerBending {
         public void SetPhysics(float gravity = 1, float mass = 1, float drag = -1, float angularDrag = -1)
             => item.mainCollisionHandler.SetPhysicModifier(this, 4, gravity, mass, drag, angularDrag);
         public void ResetPhysics() => item.mainCollisionHandler.RemovePhysicModifier(this);
-
+        public IEnumerator Explosion() {
+            var effectHolder = new GameObject();
+            effectHolder.transform.SetPositionAndRotation(transform.position, transform.rotation);
+            Catalog.GetData<EffectData>("ExplosionFX").Spawn(effectHolder.transform).Play();
+            yield return new WaitForSeconds(0.623f);
+            Utils.Explosion(transform.position, 30, 2, true, true);
+            Despawn();
+        }
         public void IgnorePlayerCollisions() {
             if (isIgnoringPlayer)
                 return;

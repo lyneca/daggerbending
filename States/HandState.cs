@@ -18,6 +18,7 @@ namespace DaggerBending.States {
             dagger.rb.isKinematic = true;
         }
         public override bool ShouldIgnorePlayer() => true;
+        public override bool CanImbue(RagdollHand hand) => hand != this.hand;
         public void Init(RagdollHand hand) {
             this.hand = hand;
         }

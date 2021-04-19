@@ -22,6 +22,7 @@ namespace DaggerBending.States {
             this.hand = hand;
             this.index = index;
         }
+        public override bool CanImbue(RagdollHand hand) => hand != this.hand;
         public override void Update() {
             base.Update();
             Vector3 position;

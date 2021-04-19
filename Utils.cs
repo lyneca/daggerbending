@@ -286,6 +286,37 @@ static class Utils {
         FieldInfo field = instance.GetType().GetField(fieldName, bindFlags);
         return field.GetValue(instance);
     }
+    public static void Explosion(Vector3 origin, float force, float radius, bool massCompensation = false, bool disarm = false) {
+        var seenRigidbodies = new List<Rigidbody>();
+        var seenCreatures = new List<Creature> { Player.currentCreature };
+        foreach (var collider in Physics.OverlapSphere(origin, radius)) {
+            if (collider.attachedRigidbody == null)
+                continue;
+            if (collider.attachedRigidbody.gameObject.layer == GameManager.GetLayer(LayerName.PlayerHandAndFoot) ||
+               collider.attachedRigidbody.gameObject.layer == GameManager.GetLayer(LayerName.PlayerLocomotion) ||
+               collider.attachedRigidbody.gameObject.layer == GameManager.GetLayer(LayerName.PlayerLocomotionObject))
+                continue;
+            if (!seenRigidbodies.Contains(collider.attachedRigidbody)) {
+                seenRigidbodies.Add(collider.attachedRigidbody);
+                float modifier = 1;
+                if (collider.attachedRigidbody.mass < 1) {
+                    modifier *= collider.attachedRigidbody.mass * 2;
+                } else {
+                    modifier *= collider.attachedRigidbody.mass;
+                }
+                if (!massCompensation)
+                    modifier = 1;
+                collider.attachedRigidbody.AddExplosionForce(force * modifier, origin, radius, 1, ForceMode.Impulse);
+            } else if (collider.GetComponentInParent<Creature>() is Creature npc && npc != null && !seenCreatures.Contains(npc)) {
+                seenCreatures.Add(npc);
+                npc.brain.instance.TryPush((npc.ragdoll.rootPart.transform.position - origin).normalized, npc.ragdoll.creature.brain.instance.gravityPushBehaviorPerLevel[2]);
+                if (disarm) {
+                    npc.handLeft.TryRelease();
+                    npc.handRight.TryRelease();
+                }
+            }
+        }
+    }
 
     public static Transform GetPlayerChest() {
         return Player.currentCreature.ragdoll.GetPart(RagdollPart.Type.Torso).transform;
