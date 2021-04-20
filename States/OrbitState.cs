@@ -35,6 +35,7 @@ namespace DaggerBending.States {
                 * TARGET_DISTANCE_AHEAD;
             dagger.pidController.UpdateVelocity(targetPosition);
             dagger.rb.AddForce((positionOnBody - dagger.item.transform.position).normalized * 3);
+            dagger.Repel();
             dagger.item.Throw();
         }
         public override void Exit() {

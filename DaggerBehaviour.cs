@@ -26,7 +26,7 @@ namespace DaggerBending {
         public Item item;
         public List<DaggerBehaviour> ignoredDaggers = new List<DaggerBehaviour>();
         public EffectInstance trailEffect;
-        public bool isFullySpawned = false;
+        public bool isFullySpawned = true;
 
         public Rigidbody rb;
         public void Start() {
@@ -480,8 +480,8 @@ namespace DaggerBending {
             yield return new WaitForSeconds(seconds);
             ResetPlayerCollisions();
         }
-        public void Repel(List<DaggerBehaviour> daggers) {
-            foreach (DaggerBehaviour dagger in daggers) {
+        public void Repel() {
+            foreach (DaggerBehaviour dagger in controller.GetDaggersInState<OrbitState>()) {
                 if (dagger != this) {
                     var distance = (transform.position - dagger.transform.position);
                     rb.AddForce(distance.normalized * (1 / Mathf.Pow(distance.magnitude * 2, 3).SafetyClamp()).SafetyClamp());

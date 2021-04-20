@@ -9,6 +9,8 @@ using UnityEngine;
 using Valve.VR;
 
 using ExtensionMethods;
+using System.Collections;
+
 namespace ExtensionMethods {
     static class ExtensionMethods {
         /// <summary>Get raw angular velocity of the player hand</summaryt
@@ -256,7 +258,19 @@ namespace ExtensionMethods {
             instance.effects.ForEach(effect => effect.transform.rotation = rotation);
         }
 
-        public static void RefreshIndexes(this Holder holder) {
+        public static void RunCoroutine(this MonoBehaviour mono, Func<IEnumerator> function, float delay = 0) {
+            mono.StartCoroutine(RunAfterCoroutine(function, delay));
+        }
+        public static void RunAfter(this MonoBehaviour mono, System.Action action, float delay = 0) {
+            mono.StartCoroutine(RunAfterCoroutine(action, delay));
+        }
+        public static IEnumerator RunAfterCoroutine(Func<IEnumerator> function, float delay) {
+            yield return new WaitForSeconds(delay);
+            yield return function();
+        }
+        public static IEnumerator RunAfterCoroutine(System.Action action, float delay) {
+            yield return new WaitForSeconds(delay);
+            action();
         }
 
         // This method is ILLEGAL and only acceptable in places where no other option exists

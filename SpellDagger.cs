@@ -161,6 +161,7 @@ namespace DaggerBending {
                 currentCharge = 0;
                 spellCaster.isFiring = false;
                 spellCaster.ragdollHand.Grab(dagger.item.GetMainHandle(spellCaster.ragdollHand.side));
+                controller.RunAfter(() => imbueEnabled = true, 0.5f);
             }
 
             if (hasSpawnedDagger)
@@ -169,7 +170,7 @@ namespace DaggerBending {
             if (!GetHeld()) {
                 imbueEnabled = true;
             }
-            if (IsGripping() && isCasting) {
+            if (IsGripping() && isCasting && !spellCaster.ragdollHand.grabbedHandle) {
                 imbueEnabled = false;
             }
 
