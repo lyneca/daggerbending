@@ -18,6 +18,7 @@ namespace DaggerBending.States {
         }
         public override bool ShouldIgnorePlayer() => true;
         public override bool CanImbue(RagdollHand hand) => true;
+        public override bool AllowExplosion() => false;
         public override void Update() {
             base.Update();
             dagger.Depenetrate();

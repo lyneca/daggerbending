@@ -422,6 +422,15 @@ namespace DaggerBending {
                             GetFreeDaggerClosestTo(hand.transform.position)?.IntoClawSword(hand, i);
                         }
                     }
+                    var daggersInHand = GetDaggersInState<ClawSwordState>().Where(dagger => dagger.IsClawSwordOn(hand));
+                    if (daggersInHand.Any()) {
+                        if (daggersInHand.Where(dagger => dagger.item.isPenetrating).Any()) {
+                            hand.playerHand.controlHand.HapticShort(0.5f);
+                        } else {
+                            var intensity = Mathf.InverseLerp(4, 12, daggersInHand.Sum(dagger => dagger.rb.velocity.magnitude) / 3);
+                            hand.playerHand.controlHand.HapticShort(Mathf.Lerp(intensity, 0, 0.3f));
+                        }
+                    }
                 } else {
                     gripActive[hand.side] = false;
                     var handVelocity = hand.Velocity();

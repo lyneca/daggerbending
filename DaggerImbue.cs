@@ -26,8 +26,7 @@ namespace DaggerBending {
             if (item.mainHandler && (item.mainHandler?.playerHand?.controlHand?.usePressed ?? false)) {
                 if (Player.currentCreature.mana.GetCaster(item.mainHandler.side).spellInstance is SpellCastCharge spell && spell != null && spell.imbueEnabled) {
                     foreach (var group in item.colliderGroups.Where(group =>
-                        group.data.modifiers.Where(mod => mod.imbueType != ColliderGroupData.ImbueType.None
-                                                && spell.imbueAllowMetal || mod.imbueType != ColliderGroupData.ImbueType.Metal).Any())) {
+                        group.data.modifiers.Where(mod => mod.imbueType != ColliderGroupData.ImbueType.None).Any())) {
                         group.imbue.Transfer(spell, 3);
                     }
                 }

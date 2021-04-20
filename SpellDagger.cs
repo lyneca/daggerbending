@@ -33,14 +33,19 @@ namespace DaggerBending {
         }
         public override void Load(Imbue imbue) {
             if (imbue.colliderGroup.collisionHandler.item is Item item && item.itemId == "DaggerCommon") {
+                item.gameObject.GetOrAddComponent<DaggerBehaviour>();
                 base.Load(imbue);
             }
         }
         public override void OnImbueCollisionStart(CollisionInstance collisionInstance) {
             if (imbue == null)
                 return;
-            base.OnImbueCollisionStart(collisionInstance);
-            if (imbue.colliderGroup.collisionHandler.item is Item item && item.gameObject.GetComponent<DaggerBehaviour>() is var dagger && !hasExplosionStarted) {
+            if (imbue.colliderGroup?.collisionHandler?.item is Item item && item.gameObject?.GetOrAddComponent<DaggerBehaviour>() is var dagger && !hasExplosionStarted) {
+                if (dagger.state == null)
+                    return;
+                if (!dagger.state.AllowExplosion())
+                    return;
+                base.OnImbueCollisionStart(collisionInstance);
                 hasExplosionStarted = true;
                 dagger.StartCoroutine(dagger.Explosion());
             }
@@ -149,7 +154,7 @@ namespace DaggerBending {
                 });
             }
 
-            if (IsGripping() && GetHeld()) {
+            if (IsGripping() && GetHeld() && GetHeld().isFullySpawned) {
                 var dagger = GetHeld();
                 dagger.IntoState<DefaultState>();
                 Fire(false);

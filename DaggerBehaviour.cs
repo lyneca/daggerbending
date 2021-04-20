@@ -23,10 +23,10 @@ namespace DaggerBending {
         public DaggerState state = null;
         DaggerController controller;
         public PIDRigidbodyHelper pidController;
-        bool isIgnoringPlayer = false;
         public Item item;
         public List<DaggerBehaviour> ignoredDaggers = new List<DaggerBehaviour>();
         public EffectInstance trailEffect;
+        public bool isFullySpawned = false;
 
         public Rigidbody rb;
         public void Start() {
@@ -83,6 +83,7 @@ namespace DaggerBending {
         }
 
         public void SpawnSizeIncrease() {
+            isFullySpawned = false;
             StartCoroutine(ScaleOverTime());
         }
         public IEnumerator ScaleOverTime() {
@@ -94,6 +95,7 @@ namespace DaggerBending {
                 item.transform.localScale = Vector3.one * amount;
                 yield return 0;
             }
+            isFullySpawned = true;
         }
         public void PlaySpawnEffect() {
             var spawnFX = Catalog.GetData<EffectData>("DaggerSpawnFX").Spawn(item.transform);
@@ -185,6 +187,11 @@ namespace DaggerBending {
             if (!item)
                 return;
             trailEffect.SetIntensity(Mathf.Clamp(rb.velocity.magnitude * 0.1f, 0, 1));
+            if (state.ShouldIgnorePlayer()) {
+                IgnorePlayerCollisions();
+            } else {
+                ResetPlayerCollisions();
+            }
             state?.Update();
             justSpawned = false;
         }
@@ -198,9 +205,12 @@ namespace DaggerBending {
             System.Diagnostics.StackFrame frame = new System.Diagnostics.StackFrame(1);
             var method = frame.GetMethod();
             if (controller.debug)
-                Debug.Log($"{method.DeclaringType}.{method.Name} is setting state from {state} to {typeof(T).FullName}");
+                Debug.Log($"{method.DeclaringType}.{method.Name} is setting state from {state} to {typeof(T).FullName}.");
+             
             state = new T();
             bool newCollide = state?.ShouldIgnorePlayer() ?? false;
+            if (controller.debug)
+                Debug.Log($"Old state {(oldCollide ? "ignores" : "resets")} collisions, new state {(newCollide ? "ignores" : "resets")} them.");
             if (oldCollide && !newCollide)
                 ResetPlayerCollisions();
             else if (!oldCollide && newCollide) {
@@ -380,24 +390,14 @@ namespace DaggerBending {
             Despawn();
         }
         public void IgnorePlayerCollisions() {
-            if (isIgnoringPlayer)
+            if (item.ignoredRagdoll)
                 return;
-            isIgnoringPlayer = true;
-            foreach (var colliderGroup in item.colliderGroups) {
-                foreach (var collider in colliderGroup.colliders) {
-                    Player.currentCreature.ragdoll.IgnoreCollision(collider, true);
-                }
-            }
+            item.IgnoreRagdollCollision(Player.currentCreature.ragdoll);
         }
         public void ResetPlayerCollisions() {
-            if (!isIgnoringPlayer)
+            if (!item.ignoredRagdoll)
                 return;
-            isIgnoringPlayer = false;
-            foreach (var colliderGroup in item.colliderGroups) {
-                foreach (var collider in colliderGroup.colliders) {
-                    Player.currentCreature.ragdoll.IgnoreCollision(collider, false);
-                }
-            }
+            item.ResetRagdollCollision();
         }
         public void IgnoreDaggerCollisions() {
             foreach (var dagger in controller.daggers.Where(dagger => dagger.state.GetType() == state.GetType())) {
@@ -474,7 +474,7 @@ namespace DaggerBending {
             lastNoOrbitTime = Time.time;
             item.Throw(1, Item.FlyDetection.Forced);
             IgnorePlayerCollisions();
-            StartCoroutine(ResetPlayerCollisionsAfter(2));
+            //StartCoroutine(ResetPlayerCollisionsAfter(2));
         }
         public IEnumerator ResetPlayerCollisionsAfter(float seconds) {
             yield return new WaitForSeconds(seconds);
