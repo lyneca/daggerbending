@@ -116,6 +116,17 @@ namespace DaggerBending {
         }
 
         public T HandFunc<T>(Func<RagdollHand, RagdollHand, T> func) => func(GetHand(Side.Left), GetHand(Side.Right));
+        public void PlayThrowClip(RagdollHand hand) =>
+            hand.PlayHapticClipOver(
+                new AnimationCurve(
+                    new Keyframe(0f, 0),
+                    new Keyframe(0.2f, 0, 0, 10),
+                    new Keyframe(0.3f, 1, 10, -10),
+                    new Keyframe(0.4f, 0, -10, 0),
+                    new Keyframe(0.6f, 0, 0, 10),
+                    new Keyframe(0.7f, 1, 10, -10),
+                    new Keyframe(0.8f, 0, -10, 0),
+                    new Keyframe(1, 0)), 0.3f);
 
         public float HandVelocityTowards(RagdollHand hand, Vector3 position) {
             return HandVelocityInDirection(hand, hand.transform.position - position);
@@ -192,14 +203,14 @@ namespace DaggerBending {
             var avgHandPalmDir = (GetHand(Side.Left).PalmDir() + GetHand(Side.Right).PalmDir()) / 2;
             if (SlingshotFunctionality.Test(this)) {
                 state = new SlingshotFunctionality();
-            } else if (bothGripAndCast && PullInFunctionality.Test(this)) {
-                state = new PullInFunctionality();
-            } else if (bothGripAndCast && PushForwardFunctionality.Test(this, handMidpointDifference)) {
-                state = new PushForwardFunctionality();
+            } else if (bothGripAndCast && SwarmFunctionality.Test(this)) {
+                state = new SwarmFunctionality();
+            } else if (bothGripAndCast && ShieldFunctionality.Test(this, handMidpointDifference)) {
+                state = new ShieldFunctionality();
             //} else if (bothGripAndCast && PullOutFunctionality.Test(this)) {
             //    state = new PullOutFunctionality();
-            } else if (bothGripAndCast && PushDownFunctionality.Test(this, handMidpointDifference, avgHandPalmDir)) {
-                state = new PushDownFunctionality();
+            } else if (bothGripAndCast && GatherFunctionality.Test(this, handMidpointDifference, avgHandPalmDir)) {
+                state = new GatherFunctionality();
             }
             if (state != orgState) {
                 orgState?.Exit(this);
@@ -423,18 +434,17 @@ namespace DaggerBending {
                         }
                     }
                     var daggersInHand = GetDaggersInState<ClawSwordState>().Where(dagger => dagger.IsClawSwordOn(hand));
-                    if (daggersInHand.Any()) {
-                        if (daggersInHand.Where(dagger => dagger.item.isPenetrating).Any()) {
-                            hand.playerHand.controlHand.HapticShort(0.5f);
-                        } else {
-                            var intensity = Mathf.InverseLerp(4, 12, daggersInHand.Sum(dagger => dagger.rb.velocity.magnitude) / 3);
-                            hand.playerHand.controlHand.HapticShort(Mathf.Lerp(intensity, 0, 0.3f));
-                        }
+                    if (daggersInHand.Any() && daggersInHand.Sum(dagger => dagger.rb.velocity.magnitude) / 3 >= 4) {
+                        var intensity = Mathf.InverseLerp(4, 12, daggersInHand.Sum(dagger => dagger.rb.velocity.magnitude) / 3);
+                        hand.playerHand.controlHand.HapticShort(Mathf.Lerp(intensity, 0, 0.3f));
                     }
                 } else {
                     gripActive[hand.side] = false;
                     var handVelocity = hand.Velocity();
                     if (handVelocity.magnitude > 1.5f) {
+                        if (GetDaggersInState<ClawSwordState>().Where(dagger => dagger.IsClawSwordOn(hand)).Any()) {
+                            PlayThrowClip(hand);
+                        }
                         foreach (var dagger in GetDaggersInState<ClawSwordState>().Where(dagger => dagger.IsClawSwordOn(hand))) {
                             dagger.ThrowForce(handVelocity * 0.7f, true);
                         }
@@ -577,6 +587,7 @@ namespace DaggerBending {
                 yield break;
             }
             hand.Grab(dagger.GetMainHandle(hand.side), targetOrientation, axisPosition, true);
+            hand.HapticTick(1);
             hand.caster.spellInstance = spell;
             handFlipping[hand] = false;
         }
@@ -602,7 +613,7 @@ namespace DaggerBending {
         public virtual void Update(DaggerController controller) { }
     }
 
-    public class PullInFunctionality : Functionality {
+    public class SwarmFunctionality : Functionality {
         public static bool Test(DaggerController controller) =>
             controller.startHandDistance > 0.2f
             && controller.BothHands(hand => controller.FacingPosition(hand.Palm(), hand.PalmDir(), hand.otherHand.Palm()))
@@ -629,6 +640,9 @@ namespace DaggerBending {
                     centerPos + handAngle * pos.Rotated(Quaternion.AngleAxis(Time.time * 120, normal)),
                     Quaternion.LookRotation((controller.AverageHandVelocity() + facingDir).normalized));
             }
+            var daggers = controller.GetDaggersInState<FlyState>();
+            var intensity = Mathf.InverseLerp(2, 12, daggers.Sum(dagger => dagger.rb.velocity.magnitude) / daggers.Count());
+            controller.ForBothHands(hand => hand.HapticTick(intensity));
         }
         public override void Exit(DaggerController controller) {
             base.Exit(controller);
@@ -648,6 +662,7 @@ namespace DaggerBending {
     public class SingleHandShield : SingleHandFunctionality {
         public override void Enter(DaggerController controller, RagdollHand hand) {
             base.Enter(controller, hand);
+            hand.PlayHapticClipOver(new AnimationCurve(new Keyframe(0f, 0), new Keyframe(1f, 1)), 0.3f);
         }
         public static bool Test(DaggerController controller, RagdollHand hand) {
             return controller.HandVelocityInDirection(hand, -hand.PalmDir()) > 1.2f;
@@ -673,6 +688,7 @@ namespace DaggerBending {
             base.Exit(controller);
             var handVelocity = controller.BothHands().Select(hand => hand.Velocity()).Aggregate((a, b) => a + b) / 2;
             if (handVelocity.magnitude > 1.5f) {
+                controller.PlayThrowClip(hand);
                 foreach (var dagger in controller.GetDaggersInState<ShieldState>().Where(dagger => dagger.IsShieldOnHand(hand))) {
                     var shield = dagger.state as ShieldState;
                     dagger.ThrowForce(handVelocity + shield.GetOffset() * 3, true);
@@ -688,6 +704,8 @@ namespace DaggerBending {
     public class TrapFunctionality : SingleHandFunctionality {
         public DaggerBehaviour dagger;
         public Vector3? hoverPoint;
+        Vector3 lastTickPos;
+        float tickDistance = 1f;
 
         public static bool Test(DaggerController controller, RagdollHand hand) {
             Vector3 handAngularVelocity = hand.LocalAngularVelocity();
@@ -701,10 +719,16 @@ namespace DaggerBending {
         public override void Update(DaggerController controller) {
             base.Update(controller);
             if (!dagger) {
-                if (controller.DaggerAvailable())
+                if (controller.DaggerAvailable()) {
                     dagger = controller.GetFreeDaggerClosestTo(hand.transform.position);
+                    lastTickPos = dagger.transform.position;
+                }
                 if (!dagger)
                     return;
+            }
+            if (Vector3.Distance(lastTickPos, dagger.transform.position) > tickDistance) {
+                lastTickPos = dagger.transform.position;
+                hand.HapticTick(1);
             }
             if (Physics.Raycast(hand.transform.position + hand.PointDir() * 0.3f, hand.PointDir(), out RaycastHit hit, Mathf.Infinity, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) {
                 hoverPoint = hit.point + Vector3.up * 1;
@@ -720,7 +744,7 @@ namespace DaggerBending {
         }
     }
 
-    public class PushForwardFunctionality : Functionality {
+    public class ShieldFunctionality : Functionality {
         public static bool Test(DaggerController controller, Vector3 handMidpointDifference) =>
             handMidpointDifference.magnitude > 0.2f
             && controller.FacingDirection(handMidpointDifference, Player.currentCreature.GetHead().transform.forward)
@@ -728,6 +752,7 @@ namespace DaggerBending {
 
         public override void Enter(DaggerController controller) {
             base.Enter(controller);
+            controller.ForBothHands(hand => hand.PlayHapticClipOver(new AnimationCurve(new Keyframe(0f, 0), new Keyframe(1f, 1)), 0.3f));
         }
         public override void Update(DaggerController controller) {
             base.Update(controller);
@@ -738,7 +763,7 @@ namespace DaggerBending {
             foreach (var dagger in controller.GetDaggersInState<ShieldState>().Where(dagger => dagger.IsLargeShield())) {
                 dagger.UpdateShield(
                     controller.HandMidpoint() + controller.HandDirection() * 0.4f,
-                    Quaternion.LookRotation(controller.HandDirection()),
+                    Quaternion.LookRotation(controller.HandDirection(), controller.AverageHandPointDir()),
                     count);
             }
         }
@@ -750,7 +775,7 @@ namespace DaggerBending {
         }
     }
 
-    public class PullOutFunctionality : Functionality {
+    public class TrackFireFunctionality : Functionality {
         public float delay = 0.7f;
         public static bool Test(DaggerController controller) => controller.HandDistance() > controller.startHandDistance + 0.1f;
         public override void Enter(DaggerController controller) {
@@ -767,12 +792,13 @@ namespace DaggerBending {
         }
     }
 
-    public class PushDownFunctionality : Functionality {
+    public class GatherFunctionality : Functionality {
         public override void Enter(DaggerController controller) {
             base.Enter(controller);
             var midpoint = new GameObject();
             midpoint.transform.position = controller.HandMidpoint();
             Catalog.GetData<EffectData>("DaggerPullFX").Spawn(midpoint.transform).Play();
+            controller.ForBothHands(hand => hand.PlayHapticClipOver(new AnimationCurve(new Keyframe(0, 0), new Keyframe(1, 1)), 0.25f));
         }
         public static bool Test(DaggerController controller, Vector3 handMidpointDifference, Vector3 handAvgPalmDir) =>
             handMidpointDifference.magnitude > 0.15f
@@ -792,6 +818,8 @@ namespace DaggerBending {
         EffectInstance effect;
         float lastFired = 0;
         float fireInterval = 0.25f;
+        float lastHandDistance;
+        float tickDistance = 0.05f;
 
         public static bool Test(DaggerController controller) => controller.OneSpell(spell => spell.handle && spell.handle.handlers.Any() && spell.spellCaster.ragdollHand.otherHand.IsGripping());
 
@@ -803,6 +831,7 @@ namespace DaggerBending {
             effect.Play();
             effect.SetIntensity(0.0f);
             drawHand = holdHand.otherHand;
+            lastHandDistance = controller.HandDistance();
         }
 
         public override void Update(DaggerController controller) {
@@ -812,9 +841,13 @@ namespace DaggerBending {
             }
             float intensity = Mathf.Clamp(Vector3.Distance(holdHand.transform.position, drawHand.transform.position) * 2f - 0.5f, 0, 1);
             int numDaggersNeeded = Mathf.RoundToInt(intensity * 6);
+            if (Mathf.Abs(controller.HandDistance() - lastHandDistance) > tickDistance) {
+                drawHand.HapticTick(intensity / 2);
+                lastHandDistance = controller.HandDistance();
+            }
 
             effect.SetIntensity(intensity);
-            holdHand.playerHand.controlHand.HapticShort(Mathf.Lerp(intensity, 0.05f, 0.3f));
+            //holdHand.playerHand.controlHand.HapticShort(Mathf.Lerp(intensity, 0.05f, 0.3f));
             effect.effects.ForEach(effect => {
                 effect.transform.position = holdHand.transform.position;
                 effect.transform.rotation = Quaternion.LookRotation(holdHand.PointDir());
@@ -824,6 +857,7 @@ namespace DaggerBending {
                 int numDaggersToGather = numDaggersNeeded - numDaggersOwned;
                 while (controller.DaggerAvailable(5) && numDaggersToGather > 0) {
                     controller.GetFreeDaggerClosestTo(holdHand.transform.position, 5).IntoSlingshot(holdHand);
+                    holdHand.HapticTick(1);
                     numDaggersToGather--;
                 }
             } else if (numDaggersNeeded < numDaggersOwned) {
@@ -831,6 +865,7 @@ namespace DaggerBending {
                 foreach (var dagger in controller.daggers
                     .Where(dagger => dagger.CheckState<SlingshotState>())
                     .Take(numDaggersToRelease)) {
+                    holdHand.HapticTick(1);
                     dagger.IntoState<OrbitState>();
                 }
             }
@@ -843,6 +878,8 @@ namespace DaggerBending {
                     var daggerToThrow = slingshotDaggers
                         .ElementAt(new System.Random().Next(slingshotDaggers.Count()));
                     if (daggerToThrow) {
+                        drawHand.HapticTick(1);
+                        holdHand.HapticTick(1);
                         // remove daggerToThrow from slingshotDaggers iterable
                         slingshotDaggers = slingshotDaggers.Where(dagger => dagger != daggerToThrow);
                         daggerToThrow.ThrowForce(controller.SlingshotDir(holdHand) * 3 * (1 + controller.HandDistance() * 4), true, 20);
@@ -859,6 +896,10 @@ namespace DaggerBending {
 
         public override void Exit(DaggerController controller) {
             base.Exit(controller);
+            if (controller.GetDaggersInState<SlingshotState>().Any()) {
+                drawHand.HapticTick(1);
+                holdHand.HapticTick(1);
+            }
             foreach (var dagger in controller.GetDaggersInState<SlingshotState>()) {
                 Catalog.GetData<EffectData>("SlingshotFire").Spawn(holdHand.transform).Play();
                 dagger.ThrowForce(controller.SlingshotDir(holdHand) * 2 * (1 + controller.HandDistance() * 4), true);

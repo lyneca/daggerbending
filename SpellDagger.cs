@@ -94,7 +94,7 @@ namespace DaggerBending {
                 hasSpawnedDagger = true;
                 imbueEnabled = false;
                 controller.SpawnDagger(dagger => {
-                    dagger.SpawnSizeIncrease();
+                    dagger.SpawnSizeIncrease(spellCaster.ragdollHand);
                     dagger.transform.position = spellCaster.ragdollHand.PosAboveBackOfHand();
                     dagger.item.PointItemFlyRefAtTarget(spellCaster.ragdollHand.PointDir(), 1, -spellCaster.ragdollHand.PalmDir());
                     dagger.PlaySpawnEffect();
@@ -112,6 +112,7 @@ namespace DaggerBending {
                 hasSpawnedDagger = true;
                 imbueEnabled = false;
                 Catalog.GetData<EffectData>("DaggerSelectFX").Spawn(dagger.transform).Play();
+                spellCaster.ragdollHand.PlayHapticClipOver(new AnimationCurve(new Keyframe(0f, 0), new Keyframe(1f, 1)), 0.3f);
                 dagger.IntoHand(spellCaster.ragdollHand);
                 return;
             }
@@ -173,6 +174,16 @@ namespace DaggerBending {
             if (IsGripping() && isCasting && !spellCaster.ragdollHand.grabbedHandle) {
                 imbueEnabled = false;
             }
+            if (spellCaster.imbueObjects.Any()) {
+                var intensity = spellCaster.imbueObjects
+                    .Where(obj => obj.colliderGroup.imbue is Imbue imbue 
+                               && imbue.spellCastBase is SpellDagger
+                               && obj.item.GetComponent<DaggerBehaviour>().state.CanImbue(spellCaster.ragdollHand))
+                    .Select(obj => obj.colliderGroup.imbue)
+                    .Average(imbue => imbue.energy / imbue.maxEnergy
+                                    * Mathf.InverseLerp(0.3f, 0.05f, Vector3.Distance(spellCaster.magic.position, imbue.colliderGroup.transform.position)));
+                spellCaster.ragdollHand.HapticTick(intensity);
+            }
 
             if (!IsGripping()) {
                 DetectNoGrip();
@@ -185,6 +196,7 @@ namespace DaggerBending {
             if (dagger) {
                 dagger.ThrowForce(velocity * 2, true);
                 dagger.SpawnThrowFX(velocity);
+                controller.PlayThrowClip(spellCaster.ragdollHand);
             }
         }
     }

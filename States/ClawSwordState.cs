@@ -19,6 +19,10 @@ namespace DaggerBending.States {
             dagger.SetPhysics(0);
             dagger.CreateJoint();
             dagger.IgnoreDaggerCollisions();
+            dagger.item.mainCollisionHandler.OnCollisionStartEvent += CollisionEvent;
+        }
+        public void CollisionEvent(CollisionInstance collision) {
+            hand?.playerHand.controlHand.HapticShort(1);
         }
         public override bool ShouldIgnorePlayer() => true;
         public void Init(RagdollHand hand, int index) {
@@ -53,6 +57,7 @@ namespace DaggerBending.States {
         public override void Exit() {
             base.Exit();
             dagger.ResetPhysics();
+            dagger.item.mainCollisionHandler.OnCollisionStartEvent -= CollisionEvent;
             whooshEffect.End();
             dagger.DeleteJoint();
             dagger.ResetDaggerCollisions();

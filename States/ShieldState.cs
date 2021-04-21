@@ -21,6 +21,15 @@ namespace DaggerBending.States {
             dagger.IgnoreDaggerCollisions();
             dagger.SetPhysics(0);
             dagger.CreateJoint();
+            dagger.item.mainCollisionHandler.OnCollisionStartEvent += CollisionEvent;
+        }
+        public void CollisionEvent(CollisionInstance collision) {
+            if (isBigShield) {
+                controller.GetHand(Side.Left).playerHand.controlHand.HapticShort(1);
+                controller.GetHand(Side.Right).playerHand.controlHand.HapticShort(1);
+            } else {
+                hand?.playerHand.controlHand.HapticShort(1);
+            }
         }
         public override bool ShouldIgnorePlayer() => true;
         public override bool CanImbue(RagdollHand hand) => hand != this.hand;
@@ -46,6 +55,7 @@ namespace DaggerBending.States {
         }
         public override void Exit() {
             base.Exit();
+            dagger.item.mainCollisionHandler.OnCollisionStartEvent -= CollisionEvent;
             dagger.ResetPhysics();
             dagger.ResetDaggerCollisions();
             dagger.DeleteJoint();

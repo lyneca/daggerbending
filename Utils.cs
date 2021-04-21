@@ -138,6 +138,17 @@ namespace ExtensionMethods {
         /// Is is this hand gripping?
         /// </summary>
         public static bool IsGripping(this RagdollHand hand) => hand?.playerHand?.controlHand?.gripPressed ?? false;
+        public static void HapticTick(this RagdollHand hand, float intensity = 1) => hand.playerHand.controlHand.HapticShort(intensity);
+        public static void PlayHapticClipOver(this RagdollHand hand, AnimationCurve curve, float duration) {
+            hand.StartCoroutine(HapticPlayer(hand, curve, duration));
+        }
+        public static IEnumerator HapticPlayer(RagdollHand hand, AnimationCurve curve, float duration) {
+            var time = Time.time;
+            while (Time.time - time < duration) {
+                hand.HapticTick(curve.Evaluate((Time.time - time) / duration));
+                yield return 0;
+            }
+        }
 
         /// <summary>
         /// Return the minimum entry in an interator using a custom comparable function

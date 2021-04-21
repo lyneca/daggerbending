@@ -82,17 +82,18 @@ namespace DaggerBending {
                 IntoState<DefaultState>();
         }
 
-        public void SpawnSizeIncrease() {
+        public void SpawnSizeIncrease(RagdollHand hand = null) {
             isFullySpawned = false;
-            StartCoroutine(ScaleOverTime());
+            StartCoroutine(ScaleOverTime(hand));
         }
-        public IEnumerator ScaleOverTime() {
+        public IEnumerator ScaleOverTime(RagdollHand hand = null) {
             float time = Time.time;
             while (Time.time - time < 0.2f) {
                 float amount = Mathf.Clamp((Time.time - time) / 0.2f, 0, 1).MapOverCurve(
                     Tuple.Create(0f, 0f, 0f, 0f),
                     Tuple.Create(1f, 1f, 0f, 0f));
                 item.transform.localScale = Vector3.one * amount;
+                hand?.HapticTick(amount);
                 yield return 0;
             }
             isFullySpawned = true;
@@ -186,6 +187,9 @@ namespace DaggerBending {
         public void Update() {
             if (!item)
                 return;
+            if (!Held()) {
+                item.lastHandler = null;
+            }
             trailEffect.SetIntensity(Mathf.Clamp(rb.velocity.magnitude * 0.1f, 0, 1));
             if (state.ShouldIgnorePlayer()) {
                 IgnorePlayerCollisions();

@@ -9,6 +9,10 @@ using UnityEngine;
 using UnityEngine.VFX;
 using UnityEngine.AddressableAssets;
 using ExtensionMethods;
+using System.Reflection;
+using UnityEngine.Experimental.Rendering.Universal;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace DaggerBending {
     class DaggerTutorialLevelModule : LevelModule {
@@ -17,6 +21,7 @@ namespace DaggerBending {
             foreach (var target in targetObj.GetComponentsInChildren<Transform>()) {
                 target.gameObject.AddComponent<TargetBehaviour>();
             }
+            GameObject.Find("RenderFeature").AddComponent<RenderFeatureEnabler>();
             //var updown = GameObject.Find("SandSword").AddComponent<MoveUpAndDown>();
             //updown.position = updown.transform.position;
             EventManager.onPossess += PlatformPlayerAttach;
@@ -96,3 +101,39 @@ public class PlatformShaderHandler : MonoBehaviour {
     }
 }
 
+public class RenderFeatureEnabler : MonoBehaviour {
+    // Start is called before the first frame update
+    public class DepthTester : RenderObjects { }
+    private DepthTester depthTester;
+    private ScriptableRendererData scriptableRendererData;
+    void Start() {
+        scriptableRendererData = ExtractScriptableRendererData();
+
+        //Create instance of our feature
+        depthTester = (DepthTester)ScriptableObject.CreateInstance(typeof(DepthTester));
+        depthTester.settings.Event = RenderPassEvent.AfterRenderingOpaques;
+        depthTester.settings.filterSettings.RenderQueueType = RenderQueueType.Transparent;
+        depthTester.settings.filterSettings.LayerMask = LayerMask.GetMask("Default");
+        depthTester.settings.overrideDepthState = true;
+        depthTester.settings.enableWrite = true;
+        depthTester.settings.depthCompareFunction = CompareFunction.LessEqual;
+
+        // Remove existing DepthTesters
+        var toRemove = scriptableRendererData.rendererFeatures.Where(feature => feature is DepthTester).ToList();
+        foreach (var feature in toRemove) {
+            scriptableRendererData.rendererFeatures.Remove(feature);
+        }
+
+        //Add the feature to the render pipeline
+        scriptableRendererData.rendererFeatures.Add(depthTester);
+
+        //Mark SRD as dirty so it gets updated.
+        scriptableRendererData.SetDirty();
+    }
+
+    private static ScriptableRendererData ExtractScriptableRendererData() {
+        var pipeline = ((UniversalRenderPipelineAsset)GraphicsSettings.renderPipelineAsset);
+        FieldInfo propertyInfo = pipeline.GetType().GetField("m_RendererDataList", BindingFlags.Instance | BindingFlags.NonPublic);
+        return ((ScriptableRendererData[])propertyInfo?.GetValue(pipeline))?[0];
+    }
+}
