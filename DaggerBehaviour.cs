@@ -69,6 +69,11 @@ namespace DaggerBending {
                         }
                     }
                 }
+                controller.RunAfter(() => {
+                    if (hand.caster?.spellInstance is SpellCastCharge spell) {
+                        spell.imbueEnabled = true;
+                    }
+                }, 0.5f);
             };
             item.OnUngrabEvent += (handle, hand, throwing) => {
                 var velocity = Player.local.transform.rotation * PlayerControl.GetHand(hand.side).GetHandVelocity();
@@ -171,6 +176,7 @@ namespace DaggerBending {
         public void Despawn() {
             if (!item)
                 return;
+            controller.daggers.Remove(this);
             IntoState<DefaultState>();
             item.Despawn(0.1f);
         }
@@ -210,7 +216,7 @@ namespace DaggerBending {
             var method = frame.GetMethod();
             if (controller.debug)
                 Debug.Log($"{method.DeclaringType}.{method.Name} is setting state from {state} to {typeof(T).FullName}.");
-             
+
             state = new T();
             bool newCollide = state?.ShouldIgnorePlayer() ?? false;
             if (controller.debug)
@@ -222,7 +228,7 @@ namespace DaggerBending {
             }
             state.Enter(this, controller);
         }
-        
+
         public bool CheckState<T>() where T : DaggerState => state is T;
 
         public void TrackCreature(Creature creature) {
@@ -405,17 +411,17 @@ namespace DaggerBending {
         }
         public void IgnoreDaggerCollisions() {
             foreach (var dagger in controller.daggers.Where(dagger => dagger.state.GetType() == state.GetType())) {
-                if (dagger == this)
+                if (dagger == this || dagger == null)
                     continue;
                 if (ignoredDaggers.Contains(dagger))
                     continue;
                 ignoredDaggers.Add(dagger);
                 if ((dagger?.gameObject?.activeSelf ?? false) && (gameObject?.activeSelf ?? false))
                     foreach (Collider thisCollider in gameObject.GetComponentsInChildren<Collider>()) {
-                        foreach (Collider otherCollider in dagger.gameObject.GetComponentsInChildren<Collider>()) {
+                        foreach (Collider otherCollider in dagger?.gameObject.GetComponentsInChildren<Collider>()) {
                             Physics.IgnoreCollision(thisCollider, otherCollider, true);
                         }
-                }
+                    }
             }
         }
 
@@ -423,7 +429,7 @@ namespace DaggerBending {
             if (controller?.daggers == null || gameObject == null)
                 return;
             foreach (var dagger in controller.daggers) {
-                if (dagger == this)
+                if (dagger == this || dagger == null)
                     continue;
                 if (!ignoredDaggers.Contains(dagger))
                     continue;

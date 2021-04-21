@@ -49,7 +49,7 @@ namespace DaggerBending {
         public GameObject debugObj;
 
         public void Start() {
-            daggerData = Catalog.GetData<ItemData>("DaggerCommon");
+            daggerData = Catalog.GetData<ItemData>(SpellDagger.itemId);
             groupSummonEffectData = Catalog.GetData<EffectData>("GroupSummonFX");
             handFlipping[GetHand(Side.Left)] = false;
             handFlipping[GetHand(Side.Right)] = false;
@@ -157,7 +157,7 @@ namespace DaggerBending {
             return ((hand.transform.position - hand.otherHand.transform.position).normalized + hand.PointDir().normalized / 2).normalized;
         }
 
-        public List<DaggerBehaviour> SpawnDaggersInArea(Vector3 position, float range, int count, float velocity, Vector3 fxVelocity = default) {
+        public List<DaggerBehaviour> SpawnDaggersInArea(Vector3 position, float range, int count, float velocity, Vector3 fxVelocity = default, bool imbue = false) {
             var spawnedDaggers = new List<DaggerBehaviour>();
             var effect = groupSummonEffectData.Spawn(position, Quaternion.LookRotation(Vector3.up, Vector3.forward));
             if (effect.effects.First() is EffectVfx vfx)
@@ -174,8 +174,10 @@ namespace DaggerBending {
                     dagger.item.Throw();
                     dagger.IntoState<OrbitState>();
                     dagger.item.PointItemFlyRefAtTarget(Vector3.up, 1, (position - dagger.transform.position).normalized);
-                    Array types = Enum.GetValues(typeof(ImbueType));
-                    dagger.Imbue((ImbueType)types.GetValue(UnityEngine.Random.Range(0, types.Length)));
+                    if (imbue) {
+                        Array types = Enum.GetValues(typeof(ImbueType));
+                        dagger.Imbue((ImbueType)types.GetValue(UnityEngine.Random.Range(0, types.Length)));
+                    }
                     spawnedDaggers.Add(dagger);
                 });
             }
@@ -183,7 +185,7 @@ namespace DaggerBending {
         }
 
         public void SendDaggersToOrbit(Func<DaggerBehaviour, bool> filter, bool force = false) {
-            foreach (DaggerBehaviour dagger in Item.list.Where(i => i.itemId == "DaggerCommon")
+            foreach (DaggerBehaviour dagger in Item.list.Where(i => i.itemId == SpellDagger.itemId)
                                                         .SelectNotNull(item => force
                                                                         ? item.gameObject.GetOrAddComponent<DaggerBehaviour>()
                                                                         : item.gameObject.GetComponent<DaggerBehaviour>())
@@ -307,7 +309,7 @@ namespace DaggerBending {
 
         private Color PosToColor(Vector3 pos, float alpha = 1) => new Color(pos.x + 0.5f, pos.y + 0.5f, pos.z + 0.5f, alpha);
         public Tuple<uint, Texture2D> GetDaggerMapTexture() {
-            var items = Item.list.Where(item => item.itemId == "DaggerCommon"
+            var items = Item.list.Where(item => item.itemId == SpellDagger.itemId
                                              && Vector3.Distance(
                                                  Player.currentCreature.transform.position,
                                                  item.transform.position) < 127 * mapScale);
@@ -501,8 +503,9 @@ namespace DaggerBending {
             SendDaggersToOrbit(dagger => Vector3.Distance(dagger.transform.position, Player.currentCreature.transform.position) < 3);
 
             Vector3 handAngularVelocity = GetHand(Side.Right).LocalAngularVelocity();
-            daggers = Item.list.Where(i => i.itemId == "DaggerCommon"
-                                        && i.GetComponent<DaggerBehaviour>() != null)
+            daggers = Item.list.Where(i => i.itemId == SpellDagger.itemId
+                                        && i.GetComponent<DaggerBehaviour>() != null
+                                        && i.gameObject.activeSelf)
                                .Select(dagger => dagger.GetComponent<DaggerBehaviour>())
                                .ToList();
             while (daggers.Count() > SpellDagger.maxDaggerCount) {
@@ -540,7 +543,7 @@ namespace DaggerBending {
             stateLeft?.Update(this);
             stateRight?.Update(this);
             ForBothHands(hand => {
-                if (hand.grabbedHandle?.item?.itemId == "DaggerCommon" && hand.playerHand.controlHand.alternateUsePressed && !handHasFlipped[hand] && !handFlipping[hand]) {
+                if (hand.grabbedHandle?.item?.itemId == SpellDagger.itemId && hand.playerHand.controlHand.alternateUsePressed && !handHasFlipped[hand] && !handFlipping[hand]) {
                     handHasFlipped[hand] = true;
                     StartCoroutine(DaggerFlip(hand));
                 } else if (!handFlipping[hand]) {
@@ -648,6 +651,7 @@ namespace DaggerBending {
             base.Exit(controller);
             var handVelocity = controller.BothHands().Select(hand => hand.Velocity()).Aggregate((a, b) => a + b) / 2;
             if (handVelocity.magnitude > 2) {
+                controller.ForBothHands(hand => controller.PlayThrowClip(hand));
                 foreach (var dagger in controller.GetDaggersInState<FlyState>()) {
                     dagger.ThrowForce(handVelocity, true);
                 }
@@ -921,6 +925,7 @@ namespace DaggerBending {
                               + hand.PointDir() * 3;
             spawnLocation.y = Mathf.Max(spawnLocation.y, Player.currentCreature.GetPart(RagdollPart.Type.Torso).transform.position.y);
             summonedDaggers = controller.SpawnDaggersInArea(spawnLocation, 1, 6, controller.HandVelocityInDirection(hand, Vector3.up), hand.Velocity());
+            hand.PlayHapticClipOver(new AnimationCurve(new Keyframe(0f, 0), new Keyframe(1f, 1)), 0.3f);
         }
 
         public override void Update(DaggerController controller) {
@@ -939,17 +944,20 @@ namespace DaggerBending {
                     centerPos + handAngle * pos.Rotated(Quaternion.AngleAxis(Time.time * 120, normal)),
                     Quaternion.LookRotation((hand.Velocity() + facingDir).normalized));
             }
+            if (summonedDaggers.Any()) {
+                var intensity = Mathf.InverseLerp(2, 12, summonedDaggers.Average(dagger => dagger.rb.velocity.magnitude));
+                hand.HapticTick(intensity);
+            }
         }
 
         public override void Exit(DaggerController controller) {
             base.Exit(controller);
-            summonedDaggers.ForEach(dagger => {
-                if (hand.Velocity().magnitude > 2) {
-                    dagger.ThrowForce(hand.Velocity(), true);
-                } else {
-                    dagger.IntoState<OrbitState>();
-                }
-            });
+            if (hand.Velocity().magnitude > 2) {
+                controller.PlayThrowClip(hand);
+                summonedDaggers.ForEach(dagger => dagger.ThrowForce(hand.Velocity(), true));
+            } else {
+                summonedDaggers.ForEach(dagger => dagger.IntoState<OrbitState>());
+            }
         }
     }
 

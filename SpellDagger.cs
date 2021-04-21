@@ -8,6 +8,7 @@ namespace DaggerBending {
     using States;
     public class SpellDagger : SpellCastCharge {
         public static int maxDaggerCount = 36;
+        public static string itemId = itemId;
         public static bool allowPunchDagger = false;
         public bool isCasting = false;
         public bool debugEnabled = false;
@@ -32,7 +33,7 @@ namespace DaggerBending {
             isCasting = false;
         }
         public override void Load(Imbue imbue) {
-            if (imbue.colliderGroup.collisionHandler.item is Item item && item.itemId == "DaggerCommon") {
+            if (imbue.colliderGroup.collisionHandler.item is Item item && item.itemId == itemId) {
                 item.gameObject.GetOrAddComponent<DaggerBehaviour>();
                 base.Load(imbue);
             }
@@ -162,7 +163,7 @@ namespace DaggerBending {
                 currentCharge = 0;
                 spellCaster.isFiring = false;
                 spellCaster.ragdollHand.Grab(dagger.item.GetMainHandle(spellCaster.ragdollHand.side));
-                controller.RunAfter(() => imbueEnabled = true, 0.5f);
+                //controller.RunAfter(() => imbueEnabled = true, 0.5f);
             }
 
             if (hasSpawnedDagger)
@@ -175,14 +176,16 @@ namespace DaggerBending {
                 imbueEnabled = false;
             }
             if (spellCaster.imbueObjects.Any()) {
-                var intensity = spellCaster.imbueObjects
-                    .Where(obj => obj.colliderGroup.imbue is Imbue imbue 
+                var imbuingObjects = spellCaster.imbueObjects
+                    .Where(obj => obj.colliderGroup.imbue is Imbue imbue
                                && imbue.spellCastBase is SpellDagger
                                && obj.item.GetComponent<DaggerBehaviour>().state.CanImbue(spellCaster.ragdollHand))
-                    .Select(obj => obj.colliderGroup.imbue)
-                    .Average(imbue => imbue.energy / imbue.maxEnergy
+                    .Select(obj => obj.colliderGroup.imbue);
+                if (imbuingObjects.Any()) {
+                    var intensity = imbuingObjects.Average(imbue => imbue.energy / imbue.maxEnergy
                                     * Mathf.InverseLerp(0.3f, 0.05f, Vector3.Distance(spellCaster.magic.position, imbue.colliderGroup.transform.position)));
-                spellCaster.ragdollHand.HapticTick(intensity);
+                    spellCaster.ragdollHand.HapticTick(intensity);
+                }
             }
 
             if (!IsGripping()) {
