@@ -16,12 +16,13 @@ using UnityEngine.Rendering.Universal;
 
 namespace DaggerBending {
     class DaggerTutorialLevelModule : LevelModule {
+        RenderFeatureEnabler feature;
         public override IEnumerator OnLoadCoroutine(Level level) {
             var targetObj = GameObject.Find("Targets");
             foreach (var target in targetObj.GetComponentsInChildren<Transform>()) {
                 target.gameObject.AddComponent<TargetBehaviour>();
             }
-            GameObject.Find("RenderFeature").AddComponent<RenderFeatureEnabler>();
+            feature = GameObject.Find("RenderFeature").AddComponent<RenderFeatureEnabler>();
             //var updown = GameObject.Find("SandSword").AddComponent<MoveUpAndDown>();
             //updown.position = updown.transform.position;
             EventManager.onPossess += PlatformPlayerAttach;
@@ -34,6 +35,7 @@ namespace DaggerBending {
         public override void OnUnload(Level level) {
             base.OnUnload(level);
             EventManager.onPossess -= PlatformPlayerAttach;
+            feature.RemoveRenderFeature();
         }
     }
 
@@ -129,6 +131,13 @@ public class RenderFeatureEnabler : MonoBehaviour {
 
         //Mark SRD as dirty so it gets updated.
         scriptableRendererData.SetDirty();
+    }
+    public void RemoveRenderFeature() {
+        var toRemove = scriptableRendererData.rendererFeatures.Where(feature => feature is DepthTester).ToList();
+        foreach (var feature in toRemove) {
+            scriptableRendererData.rendererFeatures.Remove(feature);
+            scriptableRendererData.SetDirty();
+        }
     }
 
     private static ScriptableRendererData ExtractScriptableRendererData() {

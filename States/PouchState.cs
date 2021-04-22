@@ -28,7 +28,11 @@ namespace DaggerBending.States {
                 return;
             }
             if (!pouch) {
-                dagger.IntoState<OrbitState>();
+                if (controller.daggersOrbitWhenIdle) {
+                    dagger.IntoState<OrbitState>();
+                } else {
+                    dagger.IntoState<DefaultState>();
+                }
                 return;
             }
             var distance = Vector3.Distance(dagger.transform.position, pouch.transform.position);

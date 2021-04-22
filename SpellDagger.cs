@@ -8,8 +8,9 @@ namespace DaggerBending {
     using States;
     public class SpellDagger : SpellCastCharge {
         public static int maxDaggerCount = 36;
-        public static string itemId = itemId;
+        public string itemId;
         public static bool allowPunchDagger = false;
+        public bool daggersOrbitWhenIdle = true;
         public bool isCasting = false;
         public bool debugEnabled = false;
         bool hasSpawnedDagger = false;
@@ -30,6 +31,8 @@ namespace DaggerBending {
             hasSpawnedDagger = false;
             isSpawningHandle = false;
             controller = spellCaster.mana.gameObject.GetOrAddComponent<DaggerController>();
+            controller.itemId = itemId;
+            controller.daggersOrbitWhenIdle = daggersOrbitWhenIdle;
             isCasting = false;
         }
         public override void Load(Imbue imbue) {

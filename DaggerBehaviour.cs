@@ -207,6 +207,18 @@ namespace DaggerBending {
         }
 
         public void IntoState<T>() where T : DaggerState, new() {
+            if (new T() is PouchState && !controller.PouchSlotAvailable()) {
+                if (controller.daggersOrbitWhenIdle) {
+                    IntoState<OrbitState>();
+                } else {
+                    IntoState<DefaultState>();
+                }
+                return;
+            }
+            if (new T() is OrbitState && !controller.daggersOrbitWhenIdle) {
+                IntoState<PouchState>();
+                return;
+            }
             // Don't re-enter a state we're already in
             if (state is T)
                 return;
@@ -411,17 +423,21 @@ namespace DaggerBending {
         }
         public void IgnoreDaggerCollisions() {
             foreach (var dagger in controller.daggers.Where(dagger => dagger.state.GetType() == state.GetType())) {
-                if (dagger == this || dagger == null)
-                    continue;
-                if (ignoredDaggers.Contains(dagger))
-                    continue;
-                ignoredDaggers.Add(dagger);
-                if ((dagger?.gameObject?.activeSelf ?? false) && (gameObject?.activeSelf ?? false))
-                    foreach (Collider thisCollider in gameObject.GetComponentsInChildren<Collider>()) {
-                        foreach (Collider otherCollider in dagger?.gameObject.GetComponentsInChildren<Collider>()) {
-                            Physics.IgnoreCollision(thisCollider, otherCollider, true);
+                try {
+                    if (dagger == this || dagger == null)
+                        continue;
+                    if (ignoredDaggers.Contains(dagger))
+                        continue;
+                    ignoredDaggers.Add(dagger);
+                    if ((dagger?.gameObject?.activeSelf ?? false) && (gameObject?.activeSelf ?? false))
+                        foreach (Collider thisCollider in gameObject.GetComponentsInChildren<Collider>()) {
+                            foreach (Collider otherCollider in dagger?.gameObject.GetComponentsInChildren<Collider>()) {
+                                Physics.IgnoreCollision(thisCollider, otherCollider, true);
+                            }
                         }
-                    }
+                } catch (NullReferenceException) {
+                    Debug.LogWarning("Caught NRE when ignoring dagger collisions. This is a bug but shouldn't break anything.");
+                }
             }
         }
 
@@ -429,18 +445,22 @@ namespace DaggerBending {
             if (controller?.daggers == null || gameObject == null)
                 return;
             foreach (var dagger in controller.daggers) {
-                if (dagger == this || dagger == null)
-                    continue;
-                if (!ignoredDaggers.Contains(dagger))
-                    continue;
-                ignoredDaggers.Remove(dagger);
-                if ((dagger?.gameObject?.activeSelf ?? false) && (gameObject?.activeSelf ?? false))
-                    foreach (Collider thisCollider in gameObject.GetComponentsInChildren<Collider>()) {
-                        if (dagger?.gameObject?.GetComponentsInChildren<Collider>().Any() ?? false)
-                            foreach (Collider otherCollider in dagger.gameObject.GetComponentsInChildren<Collider>()) {
-                                Physics.IgnoreCollision(thisCollider, otherCollider, false);
-                            }
-                    }
+                try {
+                    if (dagger == this || dagger == null)
+                        continue;
+                    if (!ignoredDaggers.Contains(dagger))
+                        continue;
+                    ignoredDaggers.Remove(dagger);
+                    if ((dagger?.gameObject?.activeSelf ?? false) && (gameObject?.activeSelf ?? false))
+                        foreach (Collider thisCollider in gameObject.GetComponentsInChildren<Collider>()) {
+                            if (dagger?.gameObject?.GetComponentsInChildren<Collider>().Any() ?? false)
+                                foreach (Collider otherCollider in dagger.gameObject.GetComponentsInChildren<Collider>()) {
+                                    Physics.IgnoreCollision(thisCollider, otherCollider, false);
+                                }
+                        }
+                } catch (NullReferenceException) {
+                    Debug.LogWarning("Caught NRE when resetting dagger collisions. This is a bug but shouldn't break anything.");
+                }
             }
         }
 
