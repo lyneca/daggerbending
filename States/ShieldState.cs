@@ -32,7 +32,7 @@ namespace DaggerBending.States {
             }
         }
         public override bool ShouldIgnorePlayer() => true;
-        public override bool CanImbue(RagdollHand hand) => hand != this.hand;
+        public override bool CanImbue(RagdollHand hand) => !isBigShield && hand != this.hand;
         public void Init(int index, RagdollHand hand = null, bool isBigShield = false) {
             this.index = index;
             this.hand = hand;

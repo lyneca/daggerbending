@@ -39,8 +39,8 @@ namespace DaggerBending {
             trailEffect.SetIntensity(0);
             trailEffect.Play();
             item.OnSnapEvent += holder => {
-                item.lastHandler?.ClearTouch();
-                item.lastHandler = null;
+                // item.lastHandler?.ClearTouch();
+                // item.lastHandler = null;
                 IntoState<DefaultState>();
                 if (item.transform.parent.GetComponentsInChildren<Item>() is Item[] items && items.Count() > 1) {
                     var slotToUse = holder.slots.FirstOrDefault(slot => slot.GetComponentsInChildren<Item>().Count() == 0);
@@ -89,6 +89,8 @@ namespace DaggerBending {
             if (state == null)
                 IntoState<DefaultState>();
         }
+
+        public bool CanImbue(RagdollHand hand) => state.CanImbue(hand) && item.holder?.GetComponentInParent<Item>()?.holder == null;
 
         public void SpawnSizeIncrease(RagdollHand hand = null) {
             isFullySpawned = false;

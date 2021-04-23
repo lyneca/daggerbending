@@ -10,6 +10,9 @@ namespace DaggerBending {
         public static int maxDaggerCount = 36;
         public string itemId;
         public static bool allowPunchDagger = false;
+        public float IMBUE_MANA_AMOUNT = 30;
+        public float SUMMON_MANA_AMOUNT = 20;
+        public float THROW_MANA_AMOUNT = 10;
         public bool daggersOrbitWhenIdle = true;
         public bool isCasting = false;
         public bool debugEnabled = false;
@@ -37,6 +40,7 @@ namespace DaggerBending {
         }
         public override void Load(Imbue imbue) {
             if (imbue.colliderGroup.collisionHandler.item is Item item && item.itemId == itemId) {
+                Player.currentCreature.mana.ConsumeMana(IMBUE_MANA_AMOUNT);
                 item.gameObject.GetOrAddComponent<DaggerBehaviour>();
                 base.Load(imbue);
             }
@@ -94,7 +98,8 @@ namespace DaggerBending {
             Vector3 handAngularVelocity = spellCaster.ragdollHand.LocalAngularVelocity();
 
             // Spawn dagger on flick back of hand
-            if (isCasting && !GetHeld() && velocity.z > 3) {
+            if (isCasting && !GetHeld() && velocity.z > 3 && spellCaster.mana.CanConsumeMana(SUMMON_MANA_AMOUNT)) {
+                spellCaster.mana.ConsumeMana(SUMMON_MANA_AMOUNT);
                 hasSpawnedDagger = true;
                 imbueEnabled = false;
                 controller.SpawnDagger(dagger => {
@@ -172,7 +177,7 @@ namespace DaggerBending {
             if (hasSpawnedDagger)
                 return;
 
-            if (!GetHeld()) {
+            if (!GetHeld() && spellCaster.mana.currentMana > IMBUE_MANA_AMOUNT) {
                 imbueEnabled = true;
             }
             if (IsGripping() && isCasting && !spellCaster.ragdollHand.grabbedHandle) {
@@ -182,8 +187,8 @@ namespace DaggerBending {
                 var imbuingObjects = spellCaster.imbueObjects
                     .Where(obj => obj?.colliderGroup?.imbue is Imbue imbue
                                && imbue?.spellCastBase is SpellDagger
-                               && obj.item.itemId == itemId
-                               && (obj.item.gameObject.GetOrAddComponent<DaggerBehaviour>().state?.CanImbue(spellCaster.ragdollHand) ?? false))
+                               && obj?.item?.itemId == itemId
+                               && (obj?.item.gameObject?.GetOrAddComponent<DaggerBehaviour>()?.CanImbue(spellCaster.ragdollHand) ?? false))
                     .Select(obj => obj.colliderGroup.imbue);
                 if (imbuingObjects.Any()) {
                     var intensity = imbuingObjects.Average(imbue => imbue.energy / imbue.maxEnergy
@@ -201,9 +206,12 @@ namespace DaggerBending {
             base.Throw(velocity);
             var dagger = GetHeld();
             if (dagger) {
-                dagger.ThrowForce(velocity * 2, true);
-                dagger.SpawnThrowFX(velocity);
-                controller.PlayThrowClip(spellCaster.ragdollHand);
+                if (spellCaster.mana.CanConsumeMana(THROW_MANA_AMOUNT)) {
+                    spellCaster.mana.ConsumeMana(THROW_MANA_AMOUNT);
+                    dagger.ThrowForce(velocity * 2, true);
+                    dagger.SpawnThrowFX(velocity);
+                    controller.PlayThrowClip(spellCaster.ragdollHand);
+                }
             }
         }
     }

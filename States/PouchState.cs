@@ -43,10 +43,7 @@ namespace DaggerBending.States {
             dagger.Depenetrate();
             if (Vector3.Distance(dagger.transform.position, pouch.transform.position) < 0.2f) {
                 dagger.item.rb.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
-                //pouch.RefreshChildAndParentHolder();
-                pouch.SetTouch(false);
                 pouch.Snap(dagger.item);
-                pouch.SetTouch(true);
                 Player.currentCreature.handLeft.ClearTouch();
                 Player.currentCreature.handRight.ClearTouch();
                 dagger.IntoState<DefaultState>();
@@ -55,8 +52,10 @@ namespace DaggerBending.States {
         public override void Exit() {
             base.Exit();
             dagger.DeleteJoint();
-            dagger.item.GetMainHandle(Side.Left).SetTouch(true);
-            dagger.item.GetMainHandle(Side.Right).SetTouch(true);
+            if (dagger.item.holder == null) {
+                dagger.item.GetMainHandle(Side.Left).SetTouch(true);
+                dagger.item.GetMainHandle(Side.Right).SetTouch(true);
+            }
             dagger.EnableCollisions();
             dagger.ResetDaggerCollisions();
             dagger.ResetPhysics();

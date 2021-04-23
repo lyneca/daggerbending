@@ -18,7 +18,7 @@ namespace DaggerBending.States {
             dagger.CreateJoint();
         }
         public override bool ShouldIgnorePlayer() => true;
-        public override bool CanImbue(RagdollHand hand) => true;
+        public override bool CanImbue(RagdollHand hand) => false;
         public void UpdateTarget(Vector3 pos, Quaternion rot) {
             targetPos = pos;
             targetRot = rot;

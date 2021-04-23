@@ -24,6 +24,7 @@ namespace DaggerBending {
         public float lastPunchTimeLeft;
         public float lastPunchTimeRight;
         public float punchDelay = 0.1f;
+        public float MIN_MANA_AMOUNT = 10;
         public bool wasLeftActive;
         public bool wasRightActive;
         public bool mapActive;
@@ -47,6 +48,8 @@ namespace DaggerBending {
         readonly float unSnapDelay = 0.00f;
         public bool debug = false;
         public GameObject debugObj;
+        public GameObject textObject;
+        public TextMesh text;
         public bool daggersOrbitWhenIdle = true;
 
         public void Start() {
@@ -222,7 +225,14 @@ namespace DaggerBending {
             }
             if (state != orgState) {
                 orgState?.Exit(this);
-                state?.Enter(this);
+                if (state != null) {
+                    if (Player.currentCreature.mana.CanConsumeMana(state.ManaUse())) {
+                        Player.currentCreature.mana.ConsumeMana(state.ManaUse());
+                        state?.Enter(this);
+                    } else {
+                        state = null;
+                    }
+                }
             }
         }
 
@@ -235,11 +245,23 @@ namespace DaggerBending {
                 sideState = new SummonFunctionality();
             }
             if (sideState != null) {
-                sideState.Enter(this, GetHand(side));
+                if (Player.currentCreature.mana.CanConsumeMana(Mathf.Max(sideState.ManaUse(), MIN_MANA_AMOUNT))) {
+                    Player.currentCreature.mana.ConsumeMana(sideState.ManaUse());
+                    sideState.Enter(this, GetHand(side));
+                } else {
+                    sideState = null;
+                }
             }
         }
 
         public void ShowDaggerMap() {
+            textObject = new GameObject();
+            text = textObject.AddComponent<TextMesh>();
+            textObject.transform.localScale = Vector3.one * 0.001f;
+            textObject.transform.position = HandMidpoint() + new Vector3(0, 0.05f, 0);
+            text.fontSize = 100;
+            text.anchor = TextAnchor.MiddleCenter;
+            text.alignment = TextAlignment.Center;
             mapHolder = new GameObject();
             mapHolder.transform.position = HandMidpoint();
             mapInstance = Catalog.GetData<EffectData>("DaggerMap").Spawn(mapHolder.transform);
@@ -247,7 +269,10 @@ namespace DaggerBending {
         }
 
         public void HideDaggerMap() {
+            Destroy(text);
+            Destroy(textObject);
             mapInstance.Despawn();
+            Destroy(mapHolder);
             Destroy(mapHolder, 1);
         }
 
@@ -266,6 +291,7 @@ namespace DaggerBending {
 
         public int GetFreePouchSlots(float maxDistance = 0) => GetPouches(maxDistance).Sum(pouch => pouch.data.maxQuantity - pouch.currentQuantity);
         public bool PouchSlotAvailable() => GetFreePouchSlots() - GetDaggersInState<PouchState>().Count() > 0;
+        public int NumDaggersInPouches(float maxDistance = 0) => GetPouches(maxDistance).Sum(pouch => pouch.currentQuantity);
 
         public bool DaggerAvailable(float maxPouchDistance = 0) {
             if (Time.time - lastUnSnap < unSnapDelay)
@@ -357,6 +383,9 @@ namespace DaggerBending {
             if (!mapInstance?.effects.Any() ?? false)
                 return;
             mapHolder.transform.position = HandMidpoint();
+            text.text = $"{daggers.Count()} daggers\n{NumDaggersInPouches()} in pouches";
+            textObject.transform.position = HandMidpoint() + new Vector3(0, 0.05f, 0);
+            textObject.transform.rotation = Quaternion.LookRotation(textObject.transform.position - Player.currentCreature.GetHead().transform.position, Vector3.up);
             var vfx = (mapInstance.effects.First() as EffectVfx).vfx;
             var (daggerCount, daggerTexture) = GetDaggerMapTexture();
             vfx.SetTexture("DaggerPositions", daggerTexture);
@@ -552,6 +581,27 @@ namespace DaggerBending {
             state?.Update(this);
             stateLeft?.Update(this);
             stateRight?.Update(this);
+            if (Player.currentCreature.mana.currentMana <= 0 && !Mana.infiniteMana) {
+                state.Exit(this);
+                stateLeft?.Exit(this);
+                stateRight?.Exit(this);
+            }
+
+            if (Player.currentCreature.mana.CanConsumeMana((state?.ManaConsumption() ?? 0) * Time.deltaTime)) {
+                Player.currentCreature.mana.ConsumeMana((state?.ManaConsumption() ?? 0) * Time.deltaTime);
+            } else {
+                state.Exit(this);
+            }
+            if (Player.currentCreature.mana.CanConsumeMana((stateLeft?.ManaConsumption() ?? 0) * Time.deltaTime)) {
+                Player.currentCreature.mana.ConsumeMana((stateLeft?.ManaConsumption() ?? 0) * Time.deltaTime);
+            } else {
+                stateLeft?.Exit(this);
+            }
+            if (Player.currentCreature.mana.CanConsumeMana((stateRight?.ManaConsumption() ?? 0) * Time.deltaTime)) {
+                Player.currentCreature.mana.ConsumeMana((stateRight?.ManaConsumption() ?? 0) * Time.deltaTime);
+            } else {
+                stateRight?.Exit(this);
+            }
             ForBothHands(hand => {
                 if (hand.grabbedHandle?.item?.itemId == itemId && hand.playerHand.controlHand.alternateUsePressed && !handHasFlipped[hand] && !handFlipping[hand]) {
                     handHasFlipped[hand] = true;
@@ -562,46 +612,46 @@ namespace DaggerBending {
             });
         }
 
-public IEnumerator DaggerFlip(RagdollHand hand) {
-    handFlipping[hand] = true;
-    var startTime = Time.time;
-    var dagger = hand.grabbedHandle.item;
-    var offset = hand.transform.InverseTransformPoint(dagger.transform.position);
-    var initalRotation = dagger.transform.rotation * Quaternion.Inverse(hand.transform.rotation);
-    var axisPosition = hand.gripInfo.axisPosition;
-    var currentOrientation = hand.gripInfo.orientation;
-    var spell = hand.caster.spellInstance;
-    var targetOrientation = hand.grabbedHandle.orientations
-        .Where(orientation => orientation.side == currentOrientation.side && orientation != currentOrientation)
-        .Where(orientation => {
-            var currentAngles = currentOrientation.transform.localEulerAngles;
-            var newAngles = orientation.transform.localEulerAngles;
-            return Mathf.Approximately(Mathf.Abs(currentAngles.x - newAngles.x) + Mathf.Abs(currentAngles.y - newAngles.y) + Mathf.Abs(currentAngles.z - newAngles.z), 360f);
-        })
-        .FirstOrDefault();
-    if (dagger.GetComponent<DaggerBehaviour>() is var behaviour) {
-        behaviour.lastNoOrbitTime = Time.time;
-    }
-    hand.TryRelease();
-    dagger.rb.isKinematic = true;
-    dagger.IgnoreRagdollCollision(Player.currentCreature.ragdoll);
-    while (Time.time - startTime < 0.15f) {
-        var ratio = Mathf.Sqrt(Mathf.Clamp((Time.time - startTime) / 0.15f, 0, 1));
-        dagger.transform.rotation = initalRotation * Quaternion.AngleAxis(ratio * 180, hand.PalmDir()) * hand.transform.rotation;
-        dagger.transform.position = hand.transform.TransformPoint(offset);
-        yield return 0;
-    }
-    dagger.ResetRagdollCollision();
-    dagger.rb.isKinematic = false;
-    hand.caster.spellInstance = spell;
-    if (hand.grabbedHandle != null) {
-        handFlipping[hand] = false;
-        yield break;
-    }
-    hand.Grab(dagger.GetMainHandle(hand.side), targetOrientation, axisPosition, true);
-    hand.HapticTick(1);
-    handFlipping[hand] = false;
-}
+        public IEnumerator DaggerFlip(RagdollHand hand) {
+            handFlipping[hand] = true;
+            var startTime = Time.time;
+            var dagger = hand.grabbedHandle.item;
+            var offset = hand.transform.InverseTransformPoint(dagger.transform.position);
+            var initalRotation = dagger.transform.rotation * Quaternion.Inverse(hand.transform.rotation);
+            var axisPosition = hand.gripInfo.axisPosition;
+            var currentOrientation = hand.gripInfo.orientation;
+            var spell = hand.caster.spellInstance;
+            var targetOrientation = hand.grabbedHandle.orientations
+                .Where(orientation => orientation.side == currentOrientation.side && orientation != currentOrientation)
+                .Where(orientation => {
+                    var currentAngles = currentOrientation.transform.localEulerAngles;
+                    var newAngles = orientation.transform.localEulerAngles;
+                    return Mathf.Approximately(Mathf.Abs(currentAngles.x - newAngles.x) + Mathf.Abs(currentAngles.y - newAngles.y) + Mathf.Abs(currentAngles.z - newAngles.z), 360f);
+                })
+                .FirstOrDefault();
+            if (dagger.GetComponent<DaggerBehaviour>() is var behaviour) {
+                behaviour.lastNoOrbitTime = Time.time;
+            }
+            hand.TryRelease();
+            dagger.rb.isKinematic = true;
+            dagger.IgnoreRagdollCollision(Player.currentCreature.ragdoll);
+            while (Time.time - startTime < 0.15f) {
+                var ratio = Mathf.Sqrt(Mathf.Clamp((Time.time - startTime) / 0.15f, 0, 1));
+                dagger.transform.rotation = initalRotation * Quaternion.AngleAxis(ratio * 180, hand.PalmDir()) * hand.transform.rotation;
+                dagger.transform.position = hand.transform.TransformPoint(offset);
+                yield return 0;
+            }
+            dagger.ResetRagdollCollision();
+            dagger.rb.isKinematic = false;
+            hand.caster.spellInstance = spell;
+            if (hand.grabbedHandle != null) {
+                handFlipping[hand] = false;
+                yield break;
+            }
+            hand.Grab(dagger.GetMainHandle(hand.side), targetOrientation, axisPosition, true);
+            hand.HapticTick(1);
+            handFlipping[hand] = false;
+        }
     }
 
     public abstract class Functionality {
@@ -609,6 +659,8 @@ public IEnumerator DaggerFlip(RagdollHand hand) {
         public virtual void Enter(DaggerController controller) {
             enterTime = Time.time;
         }
+        public virtual float ManaUse() => 20f;
+        public virtual float ManaConsumption() => 0f;
         public virtual void Exit(DaggerController controller) { }
         public virtual void Update(DaggerController controller) { }
     }
@@ -620,6 +672,8 @@ public IEnumerator DaggerFlip(RagdollHand hand) {
             enterTime = Time.time;
             this.hand = hand;
         }
+        public virtual float ManaUse() => 10f;
+        public virtual float ManaConsumption() => 0f;
         public virtual void Exit(DaggerController controller) { }
         public virtual void Update(DaggerController controller) { }
     }
@@ -633,6 +687,7 @@ public IEnumerator DaggerFlip(RagdollHand hand) {
         public override void Enter(DaggerController controller) {
             base.Enter(controller);
         }
+        public override float ManaConsumption() => 30f;
         public override void Update(DaggerController controller) {
             base.Update(controller);
             while (controller.DaggerAvailable(5)) {
@@ -679,6 +734,7 @@ public IEnumerator DaggerFlip(RagdollHand hand) {
         public static bool Test(DaggerController controller, RagdollHand hand) {
             return controller.HandVelocityInDirection(hand, -hand.PalmDir()) > 1.2f;
         }
+        public override float ManaConsumption() => 15f;
         public override void Update(DaggerController controller) {
             base.Update(controller);
             var count = controller.GetDaggersInState<ShieldState>().Where(dagger => dagger.IsShieldOnHand(hand)).Count();
@@ -723,6 +779,7 @@ public IEnumerator DaggerFlip(RagdollHand hand) {
             Vector3 handAngularVelocity = hand.LocalAngularVelocity();
             return hand.caster.isFiring && hand.IsGripping() && (hand.side == Side.Right ? handAngularVelocity.z < -7 : handAngularVelocity.z > 7) && handAngularVelocity.MostlyZ();
         }
+        public override float ManaUse() => 30f;
 
         public override void Enter(DaggerController controller, RagdollHand hand) {
             base.Enter(controller, hand);
@@ -757,6 +814,8 @@ public IEnumerator DaggerFlip(RagdollHand hand) {
     }
 
     public class ShieldFunctionality : Functionality {
+        public float lastCollision;
+        public float collisionDelay = 0.1f;
         public static bool Test(DaggerController controller, Vector3 handMidpointDifference) =>
             handMidpointDifference.magnitude > 0.2f
             && controller.FacingDirection(handMidpointDifference, Player.currentCreature.GetHead().transform.forward)
@@ -766,6 +825,7 @@ public IEnumerator DaggerFlip(RagdollHand hand) {
             base.Enter(controller);
             controller.ForBothHands(hand => hand.PlayHapticClipOver(new AnimationCurve(new Keyframe(0f, 0), new Keyframe(1f, 1)), 0.3f));
         }
+        public override float ManaConsumption() => 20f;
         public override void Update(DaggerController controller) {
             base.Update(controller);
             var count = controller.GetDaggersInState<ShieldState>().Where(dagger => dagger.IsLargeShield()).Count();
@@ -845,6 +905,8 @@ public IEnumerator DaggerFlip(RagdollHand hand) {
             drawHand = holdHand.otherHand;
             lastHandDistance = controller.HandDistance();
         }
+        public override float ManaUse() => 0;
+        public override float ManaConsumption() => 0;
 
         public override void Update(DaggerController controller) {
             base.Update(controller);
@@ -897,6 +959,7 @@ public IEnumerator DaggerFlip(RagdollHand hand) {
                         daggerToThrow.ThrowForce(controller.SlingshotDir(holdHand) * 3 * (1 + controller.HandDistance() * 4), true, 20);
                         Catalog.GetData<EffectData>("SlingshotFire").Spawn(daggerToThrow.transform).Play();
                     }
+                    Player.currentCreature.mana.ConsumeMana(10);
                 }
             } else {
                 lastFired = 0;
@@ -915,6 +978,7 @@ public IEnumerator DaggerFlip(RagdollHand hand) {
             foreach (var dagger in controller.GetDaggersInState<SlingshotState>()) {
                 Catalog.GetData<EffectData>("SlingshotFire").Spawn(holdHand.transform).Play();
                 dagger.ThrowForce(controller.SlingshotDir(holdHand) * 2 * (1 + controller.HandDistance() * 4), true);
+                Player.currentCreature.mana.ConsumeMana(10);
             }
             effect.SetIntensity(0.0f);
             effect.End();
@@ -927,6 +991,8 @@ public IEnumerator DaggerFlip(RagdollHand hand) {
             controller.FacingDirection(hand.PalmDir(), Vector3.up)
             && controller.HandVelocityInDirection(hand, Vector3.up) > 1.4f;
 
+        public override float ManaUse() => 20;
+        public override float ManaConsumption() => 30f;
         public override void Enter(DaggerController controller, RagdollHand hand) {
             base.Enter(controller, hand);
             var spawnLocation = hand.transform.position
