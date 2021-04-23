@@ -26,6 +26,9 @@ namespace DaggerBending {
             //var updown = GameObject.Find("SandSword").AddComponent<MoveUpAndDown>();
             //updown.position = updown.transform.position;
             EventManager.onPossess += PlatformPlayerAttach;
+            var pouchData = Catalog.GetData<ItemData>("DaggerPouch");
+            pouchData.SpawnAsync(null, new Vector3(-1.1868f, 0.2011f, 3.7483f));
+            pouchData.SpawnAsync(null, new Vector3(-0.9306f, 0.1192f, 3.750866f));
             return base.OnLoadCoroutine(level);
         }
         public void PlatformPlayerAttach(Creature creature, EventTime time) {

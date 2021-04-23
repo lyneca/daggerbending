@@ -275,12 +275,19 @@ namespace ExtensionMethods {
         public static void RunAfter(this MonoBehaviour mono, System.Action action, float delay = 0) {
             mono.StartCoroutine(RunAfterCoroutine(action, delay));
         }
+        public static void RunNextFrame(this MonoBehaviour mono, System.Action action) {
+            mono.StartCoroutine(RunNextFrameCoroutine(action));
+        }
         public static IEnumerator RunAfterCoroutine(Func<IEnumerator> function, float delay) {
             yield return new WaitForSeconds(delay);
             yield return function();
         }
         public static IEnumerator RunAfterCoroutine(System.Action action, float delay) {
             yield return new WaitForSeconds(delay);
+            action();
+        }
+        public static IEnumerator RunNextFrameCoroutine(System.Action action) {
+            yield return 0;
             action();
         }
 

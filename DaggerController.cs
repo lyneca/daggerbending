@@ -416,7 +416,8 @@ namespace DaggerBending {
         }
 
         public void Update() {
-            Debug.Log($"{GetFreePouchSlots()}, {GetDaggersInState<PouchState>().Count()}, {PouchSlotAvailable()}");
+            if (debug)
+                Debug.Log($"{GetFreePouchSlots()}, {GetDaggersInState<PouchState>().Count()}, {PouchSlotAvailable()}");
             CheckSideActive(Side.Left, ref wasLeftActive, ref stateLeft);
             CheckSideActive(Side.Right, ref wasRightActive, ref stateRight);
             ForBothHands(hand => {
@@ -561,48 +562,46 @@ namespace DaggerBending {
             });
         }
 
-        public IEnumerator DaggerFlip(RagdollHand hand) {
-            handFlipping[hand] = true;
-            var startTime = Time.time;
-            var dagger = hand.grabbedHandle.item;
-            var offset = hand.transform.InverseTransformPoint(dagger.transform.position);
-            var initalRotation = dagger.transform.rotation * Quaternion.Inverse(hand.transform.rotation);
-            float axisPosition = hand.gripInfo.axisPosition;
-            HandleOrientation currentOrientation = hand.gripInfo.orientation;
-            var spell = hand.caster.spellInstance;
-            var targetOrientation = hand.grabbedHandle.orientations
-                        .Where(orientation => orientation.side == currentOrientation.side && orientation != currentOrientation)
-                .Where(orientation => {
-                    Vector3 currentAngles = currentOrientation.transform.localEulerAngles;
-                    Vector3 newAngles = orientation.transform.localEulerAngles;
-                    return Mathf.Approximately(Mathf.Abs(currentAngles.x - newAngles.x) + Mathf.Abs(currentAngles.y - newAngles.y) + Mathf.Abs(currentAngles.z - newAngles.z), 360f);
-                })
-                .FirstOrDefault();
-            if (dagger.GetComponent<DaggerBehaviour>() is var behaviour) {
-                behaviour.lastNoOrbitTime = Time.time;
-            }
-            hand.TryRelease();
-            dagger.rb.isKinematic = true;
-            dagger.IgnoreRagdollCollision(Player.currentCreature.ragdoll);
-            //hand.SetClosePose()
-            while (Time.time - startTime < 0.15f) {
-                var ratio = Mathf.Sqrt(Mathf.Clamp((Time.time - startTime) / 0.15f, 0, 1));
-                dagger.transform.rotation = initalRotation * Quaternion.AngleAxis(ratio * 180, hand.PalmDir()) * hand.transform.rotation;
-                dagger.transform.position = hand.transform.TransformPoint(offset);
-                yield return 0;
-            }
-            dagger.ResetRagdollCollision();
-            dagger.rb.isKinematic = false;
-            if (hand.grabbedHandle != null) {
-                hand.caster.spellInstance = spell;
-                handFlipping[hand] = false;
-                yield break;
-            }
-            hand.Grab(dagger.GetMainHandle(hand.side), targetOrientation, axisPosition, true);
-            hand.HapticTick(1);
-            hand.caster.spellInstance = spell;
-            handFlipping[hand] = false;
-        }
+public IEnumerator DaggerFlip(RagdollHand hand) {
+    handFlipping[hand] = true;
+    var startTime = Time.time;
+    var dagger = hand.grabbedHandle.item;
+    var offset = hand.transform.InverseTransformPoint(dagger.transform.position);
+    var initalRotation = dagger.transform.rotation * Quaternion.Inverse(hand.transform.rotation);
+    var axisPosition = hand.gripInfo.axisPosition;
+    var currentOrientation = hand.gripInfo.orientation;
+    var spell = hand.caster.spellInstance;
+    var targetOrientation = hand.grabbedHandle.orientations
+        .Where(orientation => orientation.side == currentOrientation.side && orientation != currentOrientation)
+        .Where(orientation => {
+            var currentAngles = currentOrientation.transform.localEulerAngles;
+            var newAngles = orientation.transform.localEulerAngles;
+            return Mathf.Approximately(Mathf.Abs(currentAngles.x - newAngles.x) + Mathf.Abs(currentAngles.y - newAngles.y) + Mathf.Abs(currentAngles.z - newAngles.z), 360f);
+        })
+        .FirstOrDefault();
+    if (dagger.GetComponent<DaggerBehaviour>() is var behaviour) {
+        behaviour.lastNoOrbitTime = Time.time;
+    }
+    hand.TryRelease();
+    dagger.rb.isKinematic = true;
+    dagger.IgnoreRagdollCollision(Player.currentCreature.ragdoll);
+    while (Time.time - startTime < 0.15f) {
+        var ratio = Mathf.Sqrt(Mathf.Clamp((Time.time - startTime) / 0.15f, 0, 1));
+        dagger.transform.rotation = initalRotation * Quaternion.AngleAxis(ratio * 180, hand.PalmDir()) * hand.transform.rotation;
+        dagger.transform.position = hand.transform.TransformPoint(offset);
+        yield return 0;
+    }
+    dagger.ResetRagdollCollision();
+    dagger.rb.isKinematic = false;
+    hand.caster.spellInstance = spell;
+    if (hand.grabbedHandle != null) {
+        handFlipping[hand] = false;
+        yield break;
+    }
+    hand.Grab(dagger.GetMainHandle(hand.side), targetOrientation, axisPosition, true);
+    hand.HapticTick(1);
+    handFlipping[hand] = false;
+}
     }
 
     public abstract class Functionality {

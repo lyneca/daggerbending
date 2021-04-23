@@ -49,11 +49,14 @@ namespace DaggerBending {
                     var holderPoint = item.GetHolderPoint(holder.data.targetAnchor);
                     item.transform.MoveAlign(holderPoint.anchor, slotToUse.transform, slotToUse.transform);
                 }
+                if (holder.GetComponentInParent<Item>() is Item holderItem) {
+                    item.IgnoreObjectCollision(holderItem);
+                }
             };
             item.OnUnSnapEvent += holder => {
                 if (holder.GetComponentInParent<Item>() is Item holderItem) {
-                    item.IgnoreObjectCollision(holderItem);
-                    Invoke("ResetObjectCollision", 2f);
+                    item.RunNextFrame(() => item.IgnoreObjectCollision(holderItem));
+                    item.RunAfter(() => item.ResetObjectCollision(), 0.1f);
                 }
             };
             item.OnTelekinesisGrabEvent += (handle, grabber) => {
@@ -108,6 +111,21 @@ namespace DaggerBending {
             spawnFX.SetMesh(GetItemMesh());
             spawnFX.SetSource(GetItemMeshObject().transform);
             spawnFX.Play();
+        }
+
+        public void DisableCollisions() {
+            foreach (var cg in item.colliderGroups) {
+                foreach (var collider in cg.colliders) {
+                    collider.enabled = false;
+                }
+            }
+        }
+        public void EnableCollisions() {
+            foreach (var cg in item.colliderGroups) {
+                foreach (var collider in cg.colliders) {
+                    collider.enabled = true;
+                }
+            }
         }
 
         public bool Held() => item.mainHandler != null && !item.isTelekinesisGrabbed;
@@ -178,6 +196,7 @@ namespace DaggerBending {
                 return;
             controller.daggers.Remove(this);
             IntoState<DefaultState>();
+            trailEffect.Despawn();
             item.Despawn(0.1f);
         }
 
@@ -226,12 +245,12 @@ namespace DaggerBending {
             bool oldCollide = state?.ShouldIgnorePlayer() ?? false;
             System.Diagnostics.StackFrame frame = new System.Diagnostics.StackFrame(1);
             var method = frame.GetMethod();
-            if (controller.debug)
+            if (controller?.debug ?? false)
                 Debug.Log($"{method.DeclaringType}.{method.Name} is setting state from {state} to {typeof(T).FullName}.");
 
             state = new T();
             bool newCollide = state?.ShouldIgnorePlayer() ?? false;
-            if (controller.debug)
+            if (controller?.debug ?? false)
                 Debug.Log($"Old state {(oldCollide ? "ignores" : "resets")} collisions, new state {(newCollide ? "ignores" : "resets")} them.");
             if (oldCollide && !newCollide)
                 ResetPlayerCollisions();
@@ -384,7 +403,7 @@ namespace DaggerBending {
         }
 
         public void UpdateJoint(Vector3 position, Quaternion rotation, float strengthMult = 1, float lerpFactor = 1) {
-            if (!jointObj)
+            if (jointObj == null)
                 return;
             Utils.UpdateDriveStrengths(jointObj.GetComponent<ConfigurableJoint>(), strengthMult);
             jointObj.transform.position = Vector3.Lerp(jointObj.transform.position, position, lerpFactor);
@@ -412,11 +431,15 @@ namespace DaggerBending {
             Despawn();
         }
         public void IgnorePlayerCollisions() {
+            if (item == null)
+                return;
             if (item.ignoredRagdoll)
                 return;
             item.IgnoreRagdollCollision(Player.currentCreature.ragdoll);
         }
         public void ResetPlayerCollisions() {
+            if (item == null)
+                return;
             if (!item.ignoredRagdoll)
                 return;
             item.ResetRagdollCollision();

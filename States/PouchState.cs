@@ -14,6 +14,7 @@ namespace DaggerBending.States {
             dagger.item.GetMainHandle(Side.Left).SetTouch(false);
             dagger.item.GetMainHandle(Side.Right).SetTouch(false);
             dagger.SetPhysics(0);
+            dagger.DisableCollisions();
             dagger.IgnoreDaggerCollisions();
             dagger.CreateJoint();
         }
@@ -56,6 +57,7 @@ namespace DaggerBending.States {
             dagger.DeleteJoint();
             dagger.item.GetMainHandle(Side.Left).SetTouch(true);
             dagger.item.GetMainHandle(Side.Right).SetTouch(true);
+            dagger.EnableCollisions();
             dagger.ResetDaggerCollisions();
             dagger.ResetPhysics();
         }

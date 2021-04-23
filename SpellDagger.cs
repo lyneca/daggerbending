@@ -180,9 +180,10 @@ namespace DaggerBending {
             }
             if (spellCaster.imbueObjects.Any()) {
                 var imbuingObjects = spellCaster.imbueObjects
-                    .Where(obj => obj.colliderGroup.imbue is Imbue imbue
-                               && imbue.spellCastBase is SpellDagger
-                               && obj.item.GetComponent<DaggerBehaviour>().state.CanImbue(spellCaster.ragdollHand))
+                    .Where(obj => obj?.colliderGroup?.imbue is Imbue imbue
+                               && imbue?.spellCastBase is SpellDagger
+                               && obj.item.itemId == itemId
+                               && (obj.item.gameObject.GetOrAddComponent<DaggerBehaviour>().state?.CanImbue(spellCaster.ragdollHand) ?? false))
                     .Select(obj => obj.colliderGroup.imbue);
                 if (imbuingObjects.Any()) {
                     var intensity = imbuingObjects.Average(imbue => imbue.energy / imbue.maxEnergy
