@@ -55,8 +55,8 @@ namespace DaggerBending {
             };
             item.OnUnSnapEvent += holder => {
                 if (holder.GetComponentInParent<Item>() is Item holderItem) {
+                    item.IgnoreObjectCollision(holderItem);
                     item.RunNextFrame(() => item.IgnoreObjectCollision(holderItem));
-                    item.RunAfter(() => item.ResetObjectCollision(), 0.1f);
                 }
             };
             item.OnTelekinesisGrabEvent += (handle, grabber) => {
@@ -447,8 +447,8 @@ namespace DaggerBending {
             item.ResetRagdollCollision();
         }
         public void IgnoreDaggerCollisions() {
-            foreach (var dagger in controller.daggers.Where(dagger => dagger.state.GetType() == state.GetType())) {
-                try {
+            try {
+                foreach (var dagger in controller.daggers.Where(dagger => dagger.state.GetType() == state.GetType())) {
                     if (dagger == this || dagger == null)
                         continue;
                     if (ignoredDaggers.Contains(dagger))
@@ -460,17 +460,18 @@ namespace DaggerBending {
                                 Physics.IgnoreCollision(thisCollider, otherCollider, true);
                             }
                         }
-                } catch (NullReferenceException) {
-                    Debug.LogWarning("Caught NRE when ignoring dagger collisions. This is a bug but shouldn't break anything.");
                 }
+            } catch (NullReferenceException) {
+                Debug.LogWarning("Caught NRE when ignoring dagger collisions. This is a bug but shouldn't break anything.");
             }
         }
 
         public void ResetDaggerCollisions() {
             if (controller?.daggers == null || gameObject == null)
                 return;
-            foreach (var dagger in controller.daggers) {
-                try {
+
+            try {
+                foreach (var dagger in controller.daggers) {
                     if (dagger == this || dagger == null)
                         continue;
                     if (!ignoredDaggers.Contains(dagger))
@@ -483,9 +484,9 @@ namespace DaggerBending {
                                     Physics.IgnoreCollision(thisCollider, otherCollider, false);
                                 }
                         }
-                } catch (NullReferenceException) {
-                    Debug.LogWarning("Caught NRE when resetting dagger collisions. This is a bug but shouldn't break anything.");
                 }
+            } catch (NullReferenceException) {
+                Debug.LogWarning("Caught NRE when resetting dagger collisions. This is a bug but shouldn't break anything.");
             }
         }
 

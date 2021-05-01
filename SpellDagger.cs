@@ -39,10 +39,11 @@ namespace DaggerBending {
             isCasting = false;
         }
         public override void Load(Imbue imbue) {
-            if (imbue.colliderGroup.collisionHandler.item is Item item && item.itemId == itemId) {
+            if (imbue.colliderGroup.collisionHandler.item is Item item && item.itemId == itemId && (item.GetComponent<DaggerBehaviour>()?.CanImbue(null) ?? true)) {
                 Player.currentCreature.mana.ConsumeMana(IMBUE_MANA_AMOUNT);
                 item.gameObject.GetOrAddComponent<DaggerBehaviour>();
                 base.Load(imbue);
+            } else {
             }
         }
         public override void OnImbueCollisionStart(CollisionInstance collisionInstance) {
